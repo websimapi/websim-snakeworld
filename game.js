@@ -162,10 +162,10 @@ export class Game {
         }
         
         // Pre-fill history so segments appear behind head
-        const startPos = this.head.position.clone();
+        const historyStartPos = this.head.position.clone();
         for(let i=0; i<100; i++) {
             this.pathHistory.push({
-                pos: startPos.clone(),
+                pos: historyStartPos.clone(),
                 quat: this.head.quaternion.clone()
             });
         }
