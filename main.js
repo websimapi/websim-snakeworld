@@ -43,6 +43,7 @@ function handleInput(x, y) {
     raycaster.setFromCamera(mouse, camera);
 
     // Raycast against the earth
+    if (!game.earth) return;
     const intersects = raycaster.intersectObject(game.earth);
 
     if (intersects.length > 0) {

@@ -42,6 +42,7 @@ export class Game {
         this.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
         this.sounds = {};
         
+        this.ready = false;
         this.init();
     }
     
@@ -69,8 +70,8 @@ export class Game {
         await this.room.initialize();
         
         // Load sounds
-        this.loadSound('eat', './snake_eat.mp3');
-        this.loadSound('die', './game_over.mp3');
+        this.loadSound('eat', '/snake_eat.mp3');
+        this.loadSound('die', '/game_over.mp3');
 
         // Create Earth
         const geometry = new THREE.SphereGeometry(this.EARTH_RADIUS, 64, 64);
@@ -113,6 +114,7 @@ export class Game {
         this.spawnFood();
 
         this.enterLobby();
+        this.ready = true;
     }
     
     enterLobby() {
@@ -225,6 +227,8 @@ export class Game {
     }
 
     setTarget(point) {
+        if(!this.ready) return;
+
         if(this.isInLobby) {
             this.startGame();
             return;
@@ -236,6 +240,8 @@ export class Game {
     }
 
     update(dt) {
+        if (!this.ready) return;
+
         // --- Multiplayer Sync ---
         // Render remote snakes
         const peers = this.room.presence || {};
