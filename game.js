@@ -65,10 +65,11 @@ export class Game {
 
         // Create Earth
         const geometry = new THREE.SphereGeometry(this.EARTH_RADIUS, 64, 64);
-        const textureLoader = new THREE.TextureLoader();
         const material = new THREE.MeshStandardMaterial({
-            map: textureLoader.load('./earth_texture.png'),
-            roughness: 0.8,
+            color: 0xffffff,
+            transparent: true,
+            opacity: 0.3,
+            roughness: 0.1,
             metalness: 0.1
         });
         this.earth = new THREE.Mesh(geometry, material);
