@@ -10,8 +10,8 @@ const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerH
 const cameraRig = new THREE.Group();
 scene.add(cameraRig);
 cameraRig.add(camera);
-camera.position.z = 60;
-camera.position.y = 20;
+camera.position.z = 25;
+camera.position.y = 10;
 camera.lookAt(0, 0, 0);
 
 // Renderer
@@ -94,7 +94,7 @@ window.addEventListener('mousemove', (e) => {
 // Restart handler
 document.getElementById('game-over').addEventListener('click', () => {
     if(game.isGameOver) {
-        game.resetGame();
+        game.startGame();
     }
 });
 
@@ -106,36 +106,31 @@ function animate() {
     
     const dt = Math.min(clock.getDelta(), 0.1); // Cap delta time
     
-    if (game.isPlaying) {
-        game.update(dt);
-        
+    // Update game logic (handles both playing and lobby/remote rendering)
+    game.update(dt);
+
+    if (game.isPlaying && !game.isGameOver) {
         // Camera Follow Logic
-        // Smoothly rotate the camera rig to keep the snake head roughly centered but maintain global orientation awareness
-        // Actually, for a globe, it's often better to rotate the WORLD under the camera, or orbit the camera.
-        // Let's implement a smooth orbit follow.
-        
         const headPos = game.head.position;
         
-        // We want the camera rig to rotate such that the head is "up" or visible.
-        // Simple approach: look at earth center, position camera relative to head.
-        
-        const targetPos = headPos.clone().normalize().multiplyScalar(game.EARTH_RADIUS + 25);
-        // Add a bit of lag/smoothing
-        cameraRig.position.lerp(new THREE.Vector3(0,0,0), 0.1); // Rig stays at center
-        
-        // Calculate rotation to align camera with head
-        const idealCameraPos = headPos.clone().normalize().multiplyScalar(game.EARTH_RADIUS + 35);
-        // Offset slightly based on snake direction (optional, for dynamic feel)
+        const idealCameraPos = headPos.clone().normalize().multiplyScalar(30);
         
         camera.position.lerp(idealCameraPos, 2.0 * dt);
         camera.lookAt(0, 0, 0); // Always look at core
         
-        // Orient camera Up vector to match snake's "up" (North) relative to screen? 
-        // Or just let it roll? Letting it roll is easier but can be disorienting.
-        // Let's force camera up to be roughly aligned with a global Y if possible, but on a sphere that's hard.
         // Standard "Mario Galaxy" cam: Camera Up aligns with Head-to-Center vector (Gravity).
-        
         camera.up.copy(headPos).normalize();
+    } else {
+        // Lobby Orbit
+        const time = Date.now() * 0.0002;
+        const radius = 35;
+        const x = Math.sin(time) * radius;
+        const y = Math.sin(time * 0.5) * 10;
+        const z = Math.cos(time) * radius;
+        
+        const targetPos = new THREE.Vector3(x, y, z);
+        camera.position.lerp(targetPos, 1.0 * dt);
+        camera.lookAt(0, 0, 0);
     }
     
     renderer.render(scene, camera);

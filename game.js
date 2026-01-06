@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { getTangentDirection, getRandomPointOnSphere } from './math-utils.js';
+import { RemoteSnake } from './remote-snake.js';
 
 export class Game {
     constructor(scene, camera, renderer) {
@@ -8,14 +9,15 @@ export class Game {
         this.renderer = renderer;
         
         // Constants
-        this.EARTH_RADIUS = 30;
-        this.SNAKE_SPEED = 14.0; 
-        this.TURN_SPEED = 5.0;
-        this.SEGMENT_DISTANCE = 1.5;
+        this.EARTH_RADIUS = 10;
+        this.SNAKE_SPEED = 8.0; // Units per second
+        this.TURN_SPEED = 6.0;
+        this.SEGMENT_DISTANCE = 0.8;
         this.STARTING_SEGMENTS = 5;
         
         // State
-        this.isPlaying = false;
+        this.isPlaying = false; // "Playing" means alive and controlling snake
+        this.isInLobby = true;  // "Lobby" means spectating title screen
         this.isGameOver = false;
         this.score = 0;
         this.time = 0;
@@ -26,6 +28,11 @@ export class Game {
         this.segments = []; // Array of mesh objects
         this.pathHistory = []; // { pos: Vector3, quat: Quaternion }
         this.food = null;
+        
+        // Multiplayer
+        this.room = new WebsimSocket();
+        this.remoteSnakes = {}; // id -> RemoteSnake
+        this.playerHue = Math.random();
         
         // Movement
         this.currentDir = new THREE.Vector3(1, 0, 0); // Local tangent direction
@@ -49,15 +56,6 @@ export class Game {
         }
     }
 
-    getRadiusAt(pos) {
-        const dir = pos.clone().normalize();
-        let h = 0;
-        // Terrain noise
-        h += Math.sin(dir.x * 4) * Math.sin(dir.y * 4) * Math.sin(dir.z * 4) * 2.0;
-        h += Math.cos(dir.x * 10) * Math.sin(dir.y * 8) * 0.5;
-        return this.EARTH_RADIUS + h;
-    }
-
     playSound(name) {
         if (this.sounds[name] && this.audioCtx.state === 'running') {
             const source = this.audioCtx.createBufferSource();
@@ -67,43 +65,27 @@ export class Game {
         }
     }
 
-    init() {
+    async init() {
+        await this.room.initialize();
+        
         // Load sounds
         this.loadSound('eat', './snake_eat.mp3');
         this.loadSound('die', './game_over.mp3');
 
-        // Load Texture
-        const textureLoader = new THREE.TextureLoader();
-        const earthTexture = textureLoader.load('./earth_texture.png');
-
-        // Create Earth with Terrain
-        const geometry = new THREE.SphereGeometry(this.EARTH_RADIUS, 128, 128);
-        
-        // Apply Terrain Displacement
-        const posAttribute = geometry.attributes.position;
-        const vector = new THREE.Vector3();
-        for ( let i = 0; i < posAttribute.count; i ++ ) {
-            vector.fromBufferAttribute( posAttribute, i );
-            const r = this.getRadiusAt(vector);
-            vector.normalize().multiplyScalar(r);
-            posAttribute.setXYZ( i, vector.x, vector.y, vector.z );
-        }
-        geometry.computeVertexNormals();
-
+        // Create Earth
+        const geometry = new THREE.SphereGeometry(this.EARTH_RADIUS, 64, 64);
         const material = new THREE.MeshStandardMaterial({
-            map: earthTexture,
             color: 0xffffff,
-            roughness: 0.8,
-            metalness: 0.1,
-            transparent: false,
-            opacity: 1.0
+            transparent: true,
+            opacity: 0.3,
+            roughness: 0.1,
+            metalness: 0.1
         });
-        
         this.earth = new THREE.Mesh(geometry, material);
         this.scene.add(this.earth);
         
-        // Atmosphere glow
-        const atmGeometry = new THREE.SphereGeometry(this.EARTH_RADIUS * 1.15, 64, 64);
+        // Atmosphere glow (simplified)
+        const atmGeometry = new THREE.SphereGeometry(this.EARTH_RADIUS * 1.03, 64, 64);
         const atmMaterial = new THREE.MeshBasicMaterial({
             color: 0x4488ff,
             transparent: true,
@@ -113,68 +95,101 @@ export class Game {
         this.scene.add(new THREE.Mesh(atmGeometry, atmMaterial));
 
         // Create Snake Head
-        const headGeo = new THREE.BoxGeometry(1.6, 0.8, 1.6);
-        const headMat = new THREE.MeshStandardMaterial({ color: 0x00ff00, emissive: 0x004400 });
+        const headGeo = new THREE.BoxGeometry(0.8, 0.4, 0.8);
+        const headMat = new THREE.MeshStandardMaterial({ 
+            color: new THREE.Color().setHSL(this.playerHue, 1.0, 0.5), 
+            emissive: new THREE.Color().setHSL(this.playerHue, 1.0, 0.2) 
+        });
         this.head = new THREE.Mesh(headGeo, headMat);
-        // Position set in resetGame
+        this.head.position.set(0, this.EARTH_RADIUS, 0); // Start at North Pole area
+        this.head.visible = false; // Hidden in lobby
         this.scene.add(this.head);
 
-        // Initialize Food
-        const foodGeo = new THREE.SphereGeometry(1.0, 16, 16);
+        // Initialize Food (Local visual only, for now)
+        const foodGeo = new THREE.SphereGeometry(0.5, 16, 16);
         const foodMat = new THREE.MeshStandardMaterial({ color: 0xffaa00, emissive: 0xff0000, emissiveIntensity: 0.5 });
         this.food = new THREE.Mesh(foodGeo, foodMat);
         this.scene.add(this.food);
         this.spawnFood();
 
-        this.resetGame();
+        this.enterLobby();
     }
     
-    resetGame() {
-        // Clear segments
+    enterLobby() {
+        this.isInLobby = true;
+        this.isPlaying = false;
+        this.head.visible = false;
+        
+        // Hide local segments
+        this.segments.forEach(s => s.visible = false);
+        
+        // Reset UI
+        document.getElementById('start-message').style.display = 'block';
+        document.getElementById('start-message').innerText = "Tap to Join";
+        document.getElementById('game-over').classList.add('hidden');
+        document.getElementById('score').style.display = 'none';
+
+        // Update presence to lobby mode
+        this.room.updatePresence({ status: 'lobby' });
+    }
+    
+    startGame() {
+        // Clear old state
         this.segments.forEach(seg => this.scene.remove(seg));
         this.segments = [];
         this.pathHistory = [];
         
         // Reset Head
-        const startPos = new THREE.Vector3(0, 1, 0).normalize();
-        const startR = this.getRadiusAt(startPos);
-        this.head.position.copy(startPos.multiplyScalar(startR));
+        const startPoint = getRandomPointOnSphere(this.EARTH_RADIUS);
+        this.head.position.copy(startPoint);
+        this.head.lookAt(new THREE.Vector3(0,0,0)); // temporary to get 'up' right
+        this.head.lookAt(startPoint.clone().add(new THREE.Vector3(1,1,1))); // Random orientation
         
-        // Look tangent
-        const lookTgt = new THREE.Vector3(1, 0, 0).add(startPos).normalize().multiplyScalar(this.getRadiusAt(new THREE.Vector3(1,0,0)));
-        this.head.lookAt(lookTgt);
-        this.head.quaternion.identity(); 
+        // Project tangent
+        const surfaceNormal = this.head.position.clone().normalize();
+        const randomDir = new THREE.Vector3(Math.random()-0.5, Math.random()-0.5, Math.random()-0.5);
+        const tangent = randomDir.sub(surfaceNormal.multiplyScalar(randomDir.dot(surfaceNormal))).normalize();
         
-        // Set initial direction (Tangent X)
-        this.currentDir.set(1, 0, 0);
+        const m = new THREE.Matrix4().lookAt(this.head.position.clone().add(tangent), this.head.position, surfaceNormal);
+        this.head.quaternion.setFromRotationMatrix(m);
+        
         this.targetPoint = null;
-        
         this.score = 0;
         this.isGameOver = false;
         this.isPlaying = true;
+        this.isInLobby = false;
+        
+        this.head.visible = true;
 
+        document.getElementById('score').style.display = 'block';
         document.getElementById('score').innerText = this.score;
         document.getElementById('game-over').classList.add('hidden');
+        document.getElementById('start-message').style.display = 'none';
         
         // Rebuild initial body
         for(let i=0; i<this.STARTING_SEGMENTS; i++) {
             this.addSegment();
         }
         
-        // Pre-fill history so segments appear behind head
-        const historyStartPos = this.head.position.clone();
+        // Pre-fill history
+        const startPos = this.head.position.clone();
         for(let i=0; i<100; i++) {
             this.pathHistory.push({
-                pos: historyStartPos.clone(),
+                pos: startPos.clone(),
                 quat: this.head.quaternion.clone()
             });
+        }
+
+        // Resume audio context
+        if(this.audioCtx.state === 'suspended') {
+            this.audioCtx.resume();
         }
     }
 
     addSegment() {
-        const segGeo = new THREE.BoxGeometry(1.2, 0.6, 1.2);
+        const segGeo = new THREE.BoxGeometry(0.6, 0.3, 0.6);
         // Gradient color for body
-        const color = new THREE.Color().setHSL(0.3 + (this.segments.length * 0.02) % 0.5, 1.0, 0.5);
+        const color = new THREE.Color().setHSL(this.playerHue, 1.0, 0.5 - ((this.segments.length * 0.02) % 0.5));
         const segMat = new THREE.MeshStandardMaterial({ color: color });
         const segment = new THREE.Mesh(segGeo, segMat);
         this.scene.add(segment);
@@ -189,16 +204,14 @@ export class Game {
         
         while(!valid && tries < 20) {
             pos = getRandomPointOnSphere(this.EARTH_RADIUS);
-            // Snap to terrain
-            pos.normalize().multiplyScalar(this.getRadiusAt(pos));
             valid = true;
             
             // Check distance to head
-            if(pos.distanceTo(this.head.position) < 8) valid = false;
+            if(pos.distanceTo(this.head.position) < 5) valid = false;
             
             // Check distance to segments (simplified check)
             for(let seg of this.segments) {
-                if(pos.distanceTo(seg.position) < 3) {
+                if(pos.distanceTo(seg.position) < 2) {
                     valid = false;
                     break;
                 }
@@ -212,19 +225,48 @@ export class Game {
     }
 
     setTarget(point) {
-        if(this.isGameOver) return;
-        
-        // Resume context on first interaction
-        if(this.audioCtx.state === 'suspended') {
-            this.audioCtx.resume();
+        if(this.isInLobby) {
+            this.startGame();
+            return;
         }
+        if(this.isGameOver) return;
         
         // Project the point onto the sphere surface to be safe
         this.targetPoint = point.clone().normalize().multiplyScalar(this.EARTH_RADIUS);
     }
 
     update(dt) {
-        if(this.isGameOver) return;
+        // --- Multiplayer Sync ---
+        // Render remote snakes
+        const peers = this.room.presence || {};
+        const activeIds = new Set();
+        
+        for (const [id, data] of Object.entries(peers)) {
+            if (id === this.room.clientId) continue; // Skip self
+            if (data.status !== 'playing') continue; // Skip lobby players
+            
+            activeIds.add(id);
+            
+            if (!this.remoteSnakes[id]) {
+                this.remoteSnakes[id] = new RemoteSnake(this.scene, id, data.hue);
+            }
+            this.remoteSnakes[id].update(data, dt);
+        }
+        
+        // Cleanup disconnected or non-playing snakes
+        for (const id of Object.keys(this.remoteSnakes)) {
+            if (!activeIds.has(id)) {
+                this.remoteSnakes[id].dispose();
+                delete this.remoteSnakes[id];
+            }
+        }
+        // ------------------------
+
+        if(this.isInLobby || this.isGameOver) {
+            // Pulse food even in lobby
+            this.food.scale.setScalar(1 + Math.sin(Date.now() * 0.01) * 0.2);
+            return;
+        }
 
         // 1. Calculate movement direction
         const headPos = this.head.position.clone();
@@ -233,8 +275,8 @@ export class Game {
         // If we have a target, steer towards it
         if (this.targetPoint) {
             const dist = headPos.distanceTo(this.targetPoint);
-            if (dist < 1.0) {
-                this.targetPoint = null; // Reached target
+            if (dist < 0.5) {
+                this.targetPoint = null; // Reached target, continue straight
             } else {
                 // Get tangent direction towards target
                 const desiredDir = getTangentDirection(headPos, this.targetPoint, new THREE.Vector3(0,0,0));
@@ -267,8 +309,7 @@ export class Game {
         const nextPos = headPos.clone().add(forwardDir.multiplyScalar(moveDist));
         
         // Snap back to surface
-        const tr = this.getRadiusAt(nextPos);
-        nextPos.normalize().multiplyScalar(tr);
+        nextPos.normalize().multiplyScalar(this.EARTH_RADIUS);
         this.head.position.copy(nextPos);
 
         // 3. Record History for segments
@@ -318,7 +359,7 @@ export class Game {
         }
 
         // 5. Collision Check: Food
-        if (this.head.position.distanceTo(this.food.position) < 2.5) {
+        if (this.head.position.distanceTo(this.food.position) < 1.5) {
             this.playSound('eat');
             this.score += 10;
             document.getElementById('score').innerText = this.score;
@@ -329,7 +370,7 @@ export class Game {
         // 6. Collision Check: Self
         // Skip first few segments to avoid hitting own neck
         for(let i = 4; i < this.segments.length; i++) {
-            if (this.head.position.distanceTo(this.segments[i].position) < 1.2) {
+            if (this.head.position.distanceTo(this.segments[i].position) < 0.6) {
                 this.gameOver();
                 break;
             }
@@ -337,12 +378,28 @@ export class Game {
         
         // 7. Pulse Food
         this.food.scale.setScalar(1 + Math.sin(Date.now() * 0.01) * 0.2);
+
+        // 8. Broadcast Presence
+        this.room.updatePresence({
+            status: 'playing',
+            x: this.head.position.x,
+            y: this.head.position.y,
+            z: this.head.position.z,
+            qx: this.head.quaternion.x,
+            qy: this.head.quaternion.y,
+            qz: this.head.quaternion.z,
+            qw: this.head.quaternion.w,
+            segments: this.segments.length,
+            hue: this.playerHue
+        });
     }
 
     gameOver() {
         this.isGameOver = true;
+        this.isPlaying = false;
         this.playSound('die');
         document.getElementById('game-over').classList.remove('hidden');
-        this.isPlaying = false;
+        
+        this.room.updatePresence({ status: 'dead' });
     }
 }
