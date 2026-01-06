@@ -8,10 +8,10 @@ export class Game {
         this.renderer = renderer;
         
         // Constants
-        this.EARTH_RADIUS = 10;
-        this.SNAKE_SPEED = 8.0; // Units per second
-        this.TURN_SPEED = 6.0;
-        this.SEGMENT_DISTANCE = 0.8;
+        this.EARTH_RADIUS = 30;
+        this.SNAKE_SPEED = 14.0; 
+        this.TURN_SPEED = 5.0;
+        this.SEGMENT_DISTANCE = 1.5;
         this.STARTING_SEGMENTS = 5;
         
         // State
@@ -49,6 +49,15 @@ export class Game {
         }
     }
 
+    getRadiusAt(pos) {
+        const dir = pos.clone().normalize();
+        let h = 0;
+        // Terrain noise
+        h += Math.sin(dir.x * 4) * Math.sin(dir.y * 4) * Math.sin(dir.z * 4) * 2.0;
+        h += Math.cos(dir.x * 10) * Math.sin(dir.y * 8) * 0.5;
+        return this.EARTH_RADIUS + h;
+    }
+
     playSound(name) {
         if (this.sounds[name] && this.audioCtx.state === 'running') {
             const source = this.audioCtx.createBufferSource();
@@ -63,20 +72,38 @@ export class Game {
         this.loadSound('eat', './snake_eat.mp3');
         this.loadSound('die', './game_over.mp3');
 
-        // Create Earth
-        const geometry = new THREE.SphereGeometry(this.EARTH_RADIUS, 64, 64);
+        // Load Texture
+        const textureLoader = new THREE.TextureLoader();
+        const earthTexture = textureLoader.load('./earth_texture.png');
+
+        // Create Earth with Terrain
+        const geometry = new THREE.SphereGeometry(this.EARTH_RADIUS, 128, 128);
+        
+        // Apply Terrain Displacement
+        const posAttribute = geometry.attributes.position;
+        const vector = new THREE.Vector3();
+        for ( let i = 0; i < posAttribute.count; i ++ ) {
+            vector.fromBufferAttribute( posAttribute, i );
+            const r = this.getRadiusAt(vector);
+            vector.normalize().multiplyScalar(r);
+            posAttribute.setXYZ( i, vector.x, vector.y, vector.z );
+        }
+        geometry.computeVertexNormals();
+
         const material = new THREE.MeshStandardMaterial({
+            map: earthTexture,
             color: 0xffffff,
-            transparent: true,
-            opacity: 0.3,
-            roughness: 0.1,
-            metalness: 0.1
+            roughness: 0.8,
+            metalness: 0.1,
+            transparent: false,
+            opacity: 1.0
         });
+        
         this.earth = new THREE.Mesh(geometry, material);
         this.scene.add(this.earth);
         
-        // Atmosphere glow (simplified)
-        const atmGeometry = new THREE.SphereGeometry(this.EARTH_RADIUS * 1.03, 64, 64);
+        // Atmosphere glow
+        const atmGeometry = new THREE.SphereGeometry(this.EARTH_RADIUS * 1.15, 64, 64);
         const atmMaterial = new THREE.MeshBasicMaterial({
             color: 0x4488ff,
             transparent: true,
@@ -86,14 +113,14 @@ export class Game {
         this.scene.add(new THREE.Mesh(atmGeometry, atmMaterial));
 
         // Create Snake Head
-        const headGeo = new THREE.BoxGeometry(0.8, 0.4, 0.8);
+        const headGeo = new THREE.BoxGeometry(1.6, 0.8, 1.6);
         const headMat = new THREE.MeshStandardMaterial({ color: 0x00ff00, emissive: 0x004400 });
         this.head = new THREE.Mesh(headGeo, headMat);
-        this.head.position.set(0, this.EARTH_RADIUS, 0); // Start at North Pole area
+        // Position set in resetGame
         this.scene.add(this.head);
 
         // Initialize Food
-        const foodGeo = new THREE.SphereGeometry(0.5, 16, 16);
+        const foodGeo = new THREE.SphereGeometry(1.0, 16, 16);
         const foodMat = new THREE.MeshStandardMaterial({ color: 0xffaa00, emissive: 0xff0000, emissiveIntensity: 0.5 });
         this.food = new THREE.Mesh(foodGeo, foodMat);
         this.scene.add(this.food);
@@ -109,9 +136,14 @@ export class Game {
         this.pathHistory = [];
         
         // Reset Head
-        this.head.position.set(0, this.EARTH_RADIUS, 0);
-        this.head.lookAt(new THREE.Vector3(1, this.EARTH_RADIUS, 0));
-        this.head.quaternion.identity(); // Reset rotation
+        const startPos = new THREE.Vector3(0, 1, 0).normalize();
+        const startR = this.getRadiusAt(startPos);
+        this.head.position.copy(startPos.multiplyScalar(startR));
+        
+        // Look tangent
+        const lookTgt = new THREE.Vector3(1, 0, 0).add(startPos).normalize().multiplyScalar(this.getRadiusAt(new THREE.Vector3(1,0,0)));
+        this.head.lookAt(lookTgt);
+        this.head.quaternion.identity(); 
         
         // Set initial direction (Tangent X)
         this.currentDir.set(1, 0, 0);
@@ -140,7 +172,7 @@ export class Game {
     }
 
     addSegment() {
-        const segGeo = new THREE.BoxGeometry(0.6, 0.3, 0.6);
+        const segGeo = new THREE.BoxGeometry(1.2, 0.6, 1.2);
         // Gradient color for body
         const color = new THREE.Color().setHSL(0.3 + (this.segments.length * 0.02) % 0.5, 1.0, 0.5);
         const segMat = new THREE.MeshStandardMaterial({ color: color });
@@ -157,14 +189,16 @@ export class Game {
         
         while(!valid && tries < 20) {
             pos = getRandomPointOnSphere(this.EARTH_RADIUS);
+            // Snap to terrain
+            pos.normalize().multiplyScalar(this.getRadiusAt(pos));
             valid = true;
             
             // Check distance to head
-            if(pos.distanceTo(this.head.position) < 5) valid = false;
+            if(pos.distanceTo(this.head.position) < 8) valid = false;
             
             // Check distance to segments (simplified check)
             for(let seg of this.segments) {
-                if(pos.distanceTo(seg.position) < 2) {
+                if(pos.distanceTo(seg.position) < 3) {
                     valid = false;
                     break;
                 }
@@ -233,7 +267,8 @@ export class Game {
         const nextPos = headPos.clone().add(forwardDir.multiplyScalar(moveDist));
         
         // Snap back to surface
-        nextPos.normalize().multiplyScalar(this.EARTH_RADIUS);
+        const tr = this.getRadiusAt(nextPos);
+        nextPos.normalize().multiplyScalar(tr);
         this.head.position.copy(nextPos);
 
         // 3. Record History for segments
@@ -283,7 +318,7 @@ export class Game {
         }
 
         // 5. Collision Check: Food
-        if (this.head.position.distanceTo(this.food.position) < 1.5) {
+        if (this.head.position.distanceTo(this.food.position) < 2.5) {
             this.playSound('eat');
             this.score += 10;
             document.getElementById('score').innerText = this.score;
@@ -294,7 +329,7 @@ export class Game {
         // 6. Collision Check: Self
         // Skip first few segments to avoid hitting own neck
         for(let i = 4; i < this.segments.length; i++) {
-            if (this.head.position.distanceTo(this.segments[i].position) < 0.6) {
+            if (this.head.position.distanceTo(this.segments[i].position) < 1.2) {
                 this.gameOver();
                 break;
             }

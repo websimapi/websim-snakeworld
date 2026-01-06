@@ -10,8 +10,8 @@ const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerH
 const cameraRig = new THREE.Group();
 scene.add(cameraRig);
 cameraRig.add(camera);
-camera.position.z = 25;
-camera.position.y = 10;
+camera.position.z = 60;
+camera.position.y = 20;
 camera.lookAt(0, 0, 0);
 
 // Renderer
@@ -119,16 +119,12 @@ function animate() {
         // We want the camera rig to rotate such that the head is "up" or visible.
         // Simple approach: look at earth center, position camera relative to head.
         
-        const targetPos = headPos.clone().normalize().multiplyScalar(25); // Camera height
+        const targetPos = headPos.clone().normalize().multiplyScalar(game.EARTH_RADIUS + 25);
         // Add a bit of lag/smoothing
         cameraRig.position.lerp(new THREE.Vector3(0,0,0), 0.1); // Rig stays at center
         
         // Calculate rotation to align camera with head
-        // We want the camera to be positioned "above" the head, slightly behind its movement direction?
-        // For mobile "tap to direct", a static camera relative to the globe (rotating with the snake) might be dizzying.
-        // Better: The Camera orbits the earth, tracking the head position.
-        
-        const idealCameraPos = headPos.clone().normalize().multiplyScalar(30);
+        const idealCameraPos = headPos.clone().normalize().multiplyScalar(game.EARTH_RADIUS + 35);
         // Offset slightly based on snake direction (optional, for dynamic feel)
         
         camera.position.lerp(idealCameraPos, 2.0 * dt);
