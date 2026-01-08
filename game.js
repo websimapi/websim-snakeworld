@@ -1,6 +1,5 @@
 import * as THREE from 'three';
 import { getTangentDirection, getRandomPointOnSphere } from './math-utils.js';
-import { RemoteSnake } from './remote-snake.js';
 
 export class Game {
     constructor(scene, camera, renderer) {
@@ -16,8 +15,7 @@ export class Game {
         this.STARTING_SEGMENTS = 5;
         
         // State
-        this.isPlaying = false; // "Playing" means alive and controlling snake
-        this.isInLobby = true;  // "Lobby" means spectating title screen
+        this.isPlaying = false;
         this.isGameOver = false;
         this.score = 0;
         this.time = 0;
@@ -29,11 +27,6 @@ export class Game {
         this.pathHistory = []; // { pos: Vector3, quat: Quaternion }
         this.food = null;
         
-        // Multiplayer
-        this.room = new WebsimSocket();
-        this.remoteSnakes = {}; // id -> RemoteSnake
-        this.playerHue = Math.random();
-        
         // Movement
         this.currentDir = new THREE.Vector3(1, 0, 0); // Local tangent direction
         this.targetPoint = null; // Where the user tapped (Vector3)
@@ -41,7 +34,6 @@ export class Game {
         // Audio
         this.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
         this.sounds = {};
-        this.initialized = false;
         
         this.init();
     }
@@ -66,9 +58,7 @@ export class Game {
         }
     }
 
-    async init() {
-        await this.room.initialize();
-        
+    init() {
         // Load sounds
         this.loadSound('eat', './snake_eat.mp3');
         this.loadSound('die', './game_over.mp3');
@@ -97,83 +87,49 @@ export class Game {
 
         // Create Snake Head
         const headGeo = new THREE.BoxGeometry(0.8, 0.4, 0.8);
-        const headMat = new THREE.MeshStandardMaterial({ 
-            color: new THREE.Color().setHSL(this.playerHue, 1.0, 0.5), 
-            emissive: new THREE.Color().setHSL(this.playerHue, 1.0, 0.2) 
-        });
+        const headMat = new THREE.MeshStandardMaterial({ color: 0x00ff00, emissive: 0x004400 });
         this.head = new THREE.Mesh(headGeo, headMat);
         this.head.position.set(0, this.EARTH_RADIUS, 0); // Start at North Pole area
-        this.head.visible = false; // Hidden in lobby
         this.scene.add(this.head);
 
-        // Initialize Food (Local visual only, for now)
+        // Initialize Food
         const foodGeo = new THREE.SphereGeometry(0.5, 16, 16);
         const foodMat = new THREE.MeshStandardMaterial({ color: 0xffaa00, emissive: 0xff0000, emissiveIntensity: 0.5 });
         this.food = new THREE.Mesh(foodGeo, foodMat);
         this.scene.add(this.food);
         this.spawnFood();
 
-        this.enterLobby();
-        this.initialized = true;
+        this.resetGame();
     }
     
-    enterLobby() {
-        this.isInLobby = true;
-        this.isPlaying = false;
-        this.head.visible = false;
-        
-        // Hide local segments
-        this.segments.forEach(s => s.visible = false);
-        
-        // Reset UI
-        document.getElementById('start-message').style.display = 'block';
-        document.getElementById('start-message').innerText = "Tap to Join";
-        document.getElementById('game-over').classList.add('hidden');
-        document.getElementById('score').style.display = 'none';
-
-        // Update presence to lobby mode
-        this.room.updatePresence({ status: 'lobby' });
-    }
-    
-    startGame() {
-        // Clear old state
+    resetGame() {
+        // Clear segments
         this.segments.forEach(seg => this.scene.remove(seg));
         this.segments = [];
         this.pathHistory = [];
         
         // Reset Head
-        const startPoint = getRandomPointOnSphere(this.EARTH_RADIUS);
-        this.head.position.copy(startPoint);
-        this.head.lookAt(new THREE.Vector3(0,0,0)); // temporary to get 'up' right
-        this.head.lookAt(startPoint.clone().add(new THREE.Vector3(1,1,1))); // Random orientation
+        this.head.position.set(0, this.EARTH_RADIUS, 0);
+        this.head.lookAt(new THREE.Vector3(1, this.EARTH_RADIUS, 0));
+        this.head.quaternion.identity(); // Reset rotation
         
-        // Project tangent
-        const surfaceNormal = this.head.position.clone().normalize();
-        const randomDir = new THREE.Vector3(Math.random()-0.5, Math.random()-0.5, Math.random()-0.5);
-        const tangent = randomDir.sub(surfaceNormal.multiplyScalar(randomDir.dot(surfaceNormal))).normalize();
-        
-        const m = new THREE.Matrix4().lookAt(this.head.position.clone().add(tangent), this.head.position, surfaceNormal);
-        this.head.quaternion.setFromRotationMatrix(m);
-        
+        // Set initial direction (Tangent X)
+        this.currentDir.set(1, 0, 0);
         this.targetPoint = null;
+        
         this.score = 0;
         this.isGameOver = false;
         this.isPlaying = true;
-        this.isInLobby = false;
-        
-        this.head.visible = true;
 
-        document.getElementById('score').style.display = 'block';
         document.getElementById('score').innerText = this.score;
         document.getElementById('game-over').classList.add('hidden');
-        document.getElementById('start-message').style.display = 'none';
         
         // Rebuild initial body
         for(let i=0; i<this.STARTING_SEGMENTS; i++) {
             this.addSegment();
         }
         
-        // Pre-fill history
+        // Pre-fill history so segments appear behind head
         const startPos = this.head.position.clone();
         for(let i=0; i<100; i++) {
             this.pathHistory.push({
@@ -181,17 +137,12 @@ export class Game {
                 quat: this.head.quaternion.clone()
             });
         }
-
-        // Resume audio context
-        if(this.audioCtx.state === 'suspended') {
-            this.audioCtx.resume();
-        }
     }
 
     addSegment() {
         const segGeo = new THREE.BoxGeometry(0.6, 0.3, 0.6);
         // Gradient color for body
-        const color = new THREE.Color().setHSL(this.playerHue, 1.0, 0.5 - ((this.segments.length * 0.02) % 0.5));
+        const color = new THREE.Color().setHSL(0.3 + (this.segments.length * 0.02) % 0.5, 1.0, 0.5);
         const segMat = new THREE.MeshStandardMaterial({ color: color });
         const segment = new THREE.Mesh(segGeo, segMat);
         this.scene.add(segment);
@@ -227,94 +178,70 @@ export class Game {
     }
 
     setTarget(point) {
-        if(this.isInLobby) {
-            this.startGame();
-            return;
-        }
         if(this.isGameOver) return;
+        
+        // Resume context on first interaction
+        if(this.audioCtx.state === 'suspended') {
+            this.audioCtx.resume();
+        }
         
         // Project the point onto the sphere surface to be safe
         this.targetPoint = point.clone().normalize().multiplyScalar(this.EARTH_RADIUS);
     }
 
     update(dt) {
-        if (!this.initialized) return;
+        if(this.isGameOver) return;
 
-        // --- Multiplayer Sync ---
-        // Render remote snakes
-        const peers = this.room.presence || {};
-        const activeIds = new Set();
-        
-        for (const [id, data] of Object.entries(peers)) {
-            if (id === this.room.clientId) continue; // Skip self
-            if (data.status !== 'playing') continue; // Skip lobby players
-            
-            activeIds.add(id);
-            
-            if (!this.remoteSnakes[id]) {
-                this.remoteSnakes[id] = new RemoteSnake(this.scene, id, data.hue);
-            }
-            this.remoteSnakes[id].update(data, dt);
-        }
-        
-        // Cleanup disconnected or non-playing snakes
-        for (const id of Object.keys(this.remoteSnakes)) {
-            if (!activeIds.has(id)) {
-                this.remoteSnakes[id].dispose();
-                delete this.remoteSnakes[id];
-            }
-        }
-        // ------------------------
-
-        if(this.isInLobby || this.isGameOver) {
-            // Pulse food even in lobby
-            this.food.scale.setScalar(1 + Math.sin(Date.now() * 0.01) * 0.2);
-            return;
-        }
-
-        // 1. Calculate movement direction
+        // 1. Parallel Transport Movement Logic
         const headPos = this.head.position.clone();
         const surfaceNormal = headPos.clone().normalize();
+        
+        // Get current Forward vector in World Space
+        let currentForward = new THREE.Vector3(0, 0, 1).applyQuaternion(this.head.quaternion);
+        
+        // Ensure strictly tangent to avoid drift
+        currentForward.projectOnPlane(surfaceNormal).normalize();
 
-        // If we have a target, steer towards it
+        // Steering
         if (this.targetPoint) {
             const dist = headPos.distanceTo(this.targetPoint);
-            if (dist < 0.5) {
-                this.targetPoint = null; // Reached target, continue straight
+            if (dist < 1.0) {
+                this.targetPoint = null; // Reached target, keep going straight
             } else {
-                // Get tangent direction towards target
-                const desiredDir = getTangentDirection(headPos, this.targetPoint, new THREE.Vector3(0,0,0));
+                // Determine direction to target
+                const desiredTangent = getTangentDirection(headPos, this.targetPoint, new THREE.Vector3(0,0,0));
                 
-                // Get current forward vector (projected onto tangent plane to be safe)
-                let currentForward = new THREE.Vector3(0, 0, 1).applyQuaternion(this.head.quaternion);
+                // Steer current forward towards desired tangent
+                // Using lerp provides a smooth turn
+                currentForward.lerp(desiredTangent, this.TURN_SPEED * dt).normalize();
                 
-                // Smoothly interpolate current forward towards desired direction
-                // We use lerp on the vector, then re-normalize
-                currentForward.lerp(desiredDir, this.TURN_SPEED * dt).normalize();
-                
-                // Re-orient the head quaternion
-                // Create a matrix that looks at 'currentForward' with 'surfaceNormal' as UP
+                // We need to update the orientation (quaternion) to match this new 'currentForward'
+                // while keeping the same 'surfaceNormal' as Up.
                 const m = new THREE.Matrix4().lookAt(currentForward.clone().add(headPos), headPos, surfaceNormal);
                 this.head.quaternion.setFromRotationMatrix(m);
             }
         } else {
-            // Just keep staying tangent to sphere
-            // We need to rotate the orientation as we move around the curve
-            const forward = new THREE.Vector3(0, 0, 1).applyQuaternion(this.head.quaternion);
-            const m = new THREE.Matrix4().lookAt(forward.clone().add(headPos), headPos, surfaceNormal);
+            // Ensure orientation is clean (Forward aligns with tangent)
+            const m = new THREE.Matrix4().lookAt(currentForward.clone().add(headPos), headPos, surfaceNormal);
             this.head.quaternion.setFromRotationMatrix(m);
         }
 
-        // 2. Move Head Forward
+        // 2. Move Head Forward (Parallel Transport)
         const moveDist = this.SNAKE_SPEED * dt;
-        const forwardDir = new THREE.Vector3(0, 0, 1).applyQuaternion(this.head.quaternion);
+        const angularSpeed = moveDist / this.EARTH_RADIUS;
         
-        // Move physically
-        const nextPos = headPos.clone().add(forwardDir.multiplyScalar(moveDist));
+        // Axis of rotation is perpendicular to both Normal and Forward (i.e., Right vector)
+        // axis = normal x forward
+        const rotationAxis = new THREE.Vector3().crossVectors(surfaceNormal, currentForward).normalize();
         
-        // Snap back to surface
-        nextPos.normalize().multiplyScalar(this.EARTH_RADIUS);
-        this.head.position.copy(nextPos);
+        // Create rotation quaternion
+        const qRot = new THREE.Quaternion().setFromAxisAngle(rotationAxis, angularSpeed);
+        
+        // Apply rotation to Position
+        this.head.position.applyQuaternion(qRot);
+        
+        // Apply rotation to Orientation (transport the frame)
+        this.head.quaternion.premultiply(qRot);
 
         // 3. Record History for segments
         // We only record if we moved enough to smooth out the trail
@@ -382,28 +309,12 @@ export class Game {
         
         // 7. Pulse Food
         this.food.scale.setScalar(1 + Math.sin(Date.now() * 0.01) * 0.2);
-
-        // 8. Broadcast Presence
-        this.room.updatePresence({
-            status: 'playing',
-            x: this.head.position.x,
-            y: this.head.position.y,
-            z: this.head.position.z,
-            qx: this.head.quaternion.x,
-            qy: this.head.quaternion.y,
-            qz: this.head.quaternion.z,
-            qw: this.head.quaternion.w,
-            segments: this.segments.length,
-            hue: this.playerHue
-        });
     }
 
     gameOver() {
         this.isGameOver = true;
-        this.isPlaying = false;
         this.playSound('die');
         document.getElementById('game-over').classList.remove('hidden');
-        
-        this.room.updatePresence({ status: 'dead' });
+        this.isPlaying = false;
     }
 }
