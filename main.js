@@ -36,10 +36,17 @@ scene.add(hemiLight);
 // Camera-mounted light removed to prevent glare.
 // Note: Camera is already added to the scene via cameraRig
 
-// Initialize Game
+ // Initialize Game
 const game = new Game(scene, camera, renderer);
 
-
+// Mute toggle button
+const muteBtn = document.getElementById('mute-toggle');
+if (muteBtn) {
+    muteBtn.addEventListener('click', () => {
+        const muted = game.audioManager.toggleMuted();
+        muteBtn.textContent = muted ? '🔇' : '🔊';
+    });
+}
 
 // Setup User Info via WebsimSocket
 const room = new WebsimSocket();

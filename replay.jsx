@@ -4,7 +4,7 @@ import { createRoot } from "react-dom/client";
 import { Player } from "@websim/remotion/player";
 import { AbsoluteFill, useCurrentFrame, useVideoConfig, Audio, Sequence } from "remotion";
 import * as THREE from "three";
-const ReplayScene = ({ data }) => {
+const ReplayScene = ({ data, isMuted }) => {
   const frameIndex = useCurrentFrame();
   const { width, height } = useVideoConfig();
   const containerRef = useRef(null);
@@ -285,7 +285,7 @@ const ReplayScene = ({ data }) => {
     }),
     activeCues.map((cue) => {
       const duration = cue.name === "die" ? 150 : 30;
-      return /* @__PURE__ */ jsxDEV(Sequence, { from: cue.frame, durationInFrames: duration, children: /* @__PURE__ */ jsxDEV(Audio, { src: cue.src }, void 0, false, {
+      return /* @__PURE__ */ jsxDEV(Sequence, { from: cue.frame, durationInFrames: duration, children: /* @__PURE__ */ jsxDEV(Audio, { src: cue.src, volume: isMuted ? 0 : 1 }, void 0, false, {
         fileName: "<stdin>",
         lineNumber: 338,
         columnNumber: 25
@@ -301,22 +301,16 @@ const ReplayScene = ({ data }) => {
     columnNumber: 9
   });
 };
-let replayRoot = null;
-const mountReplay = (containerId, replayData) => {
-  const container = document.getElementById(containerId);
-  if (!container) return;
-  if (replayRoot) {
-    replayRoot.unmount();
-  }
-  replayRoot = createRoot(container);
-  const duration = replayData.frames.length;
-  const fps = replayData.config.fps || 30;
-  replayRoot.render(
-    /* @__PURE__ */ jsxDEV("div", { style: { width: "100%", height: "100%", background: "#000" }, children: /* @__PURE__ */ jsxDEV(
+const ReplayContainer = ({ data }) => {
+  const [isMuted, setIsMuted] = useState(() => data.config?.muted || false);
+  const duration = data.frames.length;
+  const fps = data.config.fps || 30;
+  return /* @__PURE__ */ jsxDEV("div", { style: { width: "100%", height: "100%", position: "relative", background: "#000" }, children: [
+    /* @__PURE__ */ jsxDEV(
       Player,
       {
         component: ReplayScene,
-        inputProps: { data: replayData },
+        inputProps: { data, isMuted },
         durationInFrames: duration,
         fps,
         compositionWidth: window.innerWidth,
@@ -325,21 +319,68 @@ const mountReplay = (containerId, replayData) => {
         controls: true,
         loop: true,
         autoPlay: true,
-        numberOfSharedAudioTags: 20
+        numberOfSharedAudioTags: 20,
+        showRenderButton: false
       },
       void 0,
       false,
       {
         fileName: "<stdin>",
-        lineNumber: 366,
+        lineNumber: 355,
         columnNumber: 13
       }
-    ) }, void 0, false, {
-      fileName: "<stdin>",
-      lineNumber: 365,
-      columnNumber: 9
-    })
-  );
+    ),
+    /* @__PURE__ */ jsxDEV(
+      "button",
+      {
+        onClick: () => setIsMuted(!isMuted),
+        style: {
+          position: "absolute",
+          right: "16px",
+          bottom: "16px",
+          zIndex: 100,
+          width: "44px",
+          height: "44px",
+          borderRadius: "50%",
+          border: "none",
+          background: "rgba(0, 0, 0, 0.6)",
+          color: "#fff",
+          fontSize: "22px",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          cursor: "pointer",
+          pointerEvents: "auto"
+        },
+        children: isMuted ? "\u{1F507}" : "\u{1F50A}"
+      },
+      void 0,
+      false,
+      {
+        fileName: "<stdin>",
+        lineNumber: 369,
+        columnNumber: 13
+      }
+    )
+  ] }, void 0, true, {
+    fileName: "<stdin>",
+    lineNumber: 354,
+    columnNumber: 9
+  });
+};
+let replayRoot = null;
+const mountReplay = (containerId, replayData) => {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  if (replayRoot) {
+    replayRoot.unmount();
+  }
+  replayRoot = createRoot(container);
+  replayRoot.render(/* @__PURE__ */ jsxDEV(ReplayContainer, { data: replayData }, void 0, false, {
+    fileName: "<stdin>",
+    lineNumber: 409,
+    columnNumber: 23
+  }));
 };
 const unmountReplay = () => {
   if (replayRoot) {
