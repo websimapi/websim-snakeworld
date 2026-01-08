@@ -1,9 +1,6 @@
-/**
- * Handles Audio Context, loading, and playing sounds.
- */
 export class AudioManager {
     constructor() {
-        this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+        this.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
         this.sounds = {};
     }
 
@@ -11,7 +8,7 @@ export class AudioManager {
         try {
             const response = await fetch(url);
             const arrayBuffer = await response.arrayBuffer();
-            const audioBuffer = await this.ctx.decodeAudioData(arrayBuffer);
+            const audioBuffer = await this.audioCtx.decodeAudioData(arrayBuffer);
             this.sounds[name] = audioBuffer;
         } catch (e) {
             console.error('Error loading sound:', name, e);
@@ -19,23 +16,21 @@ export class AudioManager {
     }
 
     play(name) {
-        if (this.sounds[name] && this.ctx.state === 'running') {
-            const source = this.ctx.createBufferSource();
+        if (this.sounds[name] && this.audioCtx.state === 'running') {
+            const source = this.audioCtx.createBufferSource();
             source.buffer = this.sounds[name];
-            source.connect(this.ctx.destination);
+            source.connect(this.audioCtx.destination);
             source.start(0);
-            return true;
         }
-        return false;
     }
 
     resume() {
-        if (this.ctx.state === 'suspended') {
-            this.ctx.resume();
+        if (this.audioCtx.state === 'suspended') {
+            this.audioCtx.resume();
         }
     }
 
     getState() {
-        return this.ctx.state;
+        return this.audioCtx.state;
     }
 }
