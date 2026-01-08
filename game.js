@@ -27,7 +27,6 @@ export class Game {
 
         // Entities
         this.earth = null;
-        this.earthTexture = new THREE.TextureLoader().load('earth_texture.png');
         this.head = null;
         this.segments = []; // Array of mesh objects
         this.pathHistory = []; // { pos: Vector3, quat: Quaternion }
@@ -89,15 +88,15 @@ export class Game {
         this.loadSound('eat', './snake_eat.mp3');
         this.loadSound('die', './game_over.mp3');
 
-        // Create Earth
+        // Create Earth (Transparent)
         const geometry = new THREE.SphereGeometry(this.EARTH_RADIUS, 64, 64);
         const material = new THREE.MeshStandardMaterial({
-            map: this.earthTexture,
-            emissive: 0x222222,
-            emissiveIntensity: 0.2,
-            roughness: 0.8,
-            metalness: 0.2,
-            side: THREE.FrontSide
+            color: 0x4488ff,
+            transparent: true,
+            opacity: 0.15,
+            roughness: 0.1,
+            metalness: 0.5,
+            side: THREE.DoubleSide
         });
         this.earth = new THREE.Mesh(geometry, material);
         this.scene.add(this.earth);

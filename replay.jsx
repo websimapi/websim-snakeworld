@@ -69,14 +69,13 @@ const ReplayScene = ({ data }) => {
     scene.add(hemiLight);
     const r = data.config.earthRadius;
     const earthGeo = new THREE.SphereGeometry(r, 64, 64);
-    const earthTex = new THREE.TextureLoader().load("earth_texture.png");
     const earthMat = new THREE.MeshStandardMaterial({
-      map: earthTex,
-      emissive: 2236962,
-      emissiveIntensity: 0.2,
-      roughness: 0.8,
-      metalness: 0.2,
-      side: THREE.FrontSide
+      color: 4491519,
+      transparent: true,
+      opacity: 0.15,
+      roughness: 0.1,
+      metalness: 0.5,
+      side: THREE.DoubleSide
     });
     const earth = new THREE.Mesh(earthGeo, earthMat);
     scene.add(earth);
@@ -198,7 +197,7 @@ const ReplayScene = ({ data }) => {
   return /* @__PURE__ */ jsxDEV(AbsoluteFill, { children: [
     /* @__PURE__ */ jsxDEV("div", { ref: containerRef, style: { width: "100%", height: "100%" } }, void 0, false, {
       fileName: "<stdin>",
-      lineNumber: 270,
+      lineNumber: 269,
       columnNumber: 13
     }),
     /* @__PURE__ */ jsxDEV("div", { style: {
@@ -235,7 +234,7 @@ const ReplayScene = ({ data }) => {
           false,
           {
             fileName: "<stdin>",
-            lineNumber: 289,
+            lineNumber: 288,
             columnNumber: 21
           }
         ),
@@ -253,12 +252,12 @@ const ReplayScene = ({ data }) => {
           whiteSpace: "nowrap"
         }, children: playerInfo.username }, void 0, false, {
           fileName: "<stdin>",
-          lineNumber: 301,
+          lineNumber: 300,
           columnNumber: 21
         })
       ] }, void 0, true, {
         fileName: "<stdin>",
-        lineNumber: 283,
+        lineNumber: 282,
         columnNumber: 17
       }),
       /* @__PURE__ */ jsxDEV("div", { style: {
@@ -270,29 +269,29 @@ const ReplayScene = ({ data }) => {
         marginTop: "10px"
       }, children: score }, void 0, false, {
         fileName: "<stdin>",
-        lineNumber: 317,
+        lineNumber: 316,
         columnNumber: 17
       })
     ] }, void 0, true, {
       fileName: "<stdin>",
-      lineNumber: 273,
+      lineNumber: 272,
       columnNumber: 13
     }),
     activeCues.map((cue) => {
       const duration = cue.name === "die" ? 150 : 30;
       return /* @__PURE__ */ jsxDEV(Sequence, { from: cue.frame, durationInFrames: duration, children: /* @__PURE__ */ jsxDEV(Audio, { src: cue.src }, void 0, false, {
         fileName: "<stdin>",
-        lineNumber: 333,
+        lineNumber: 332,
         columnNumber: 25
       }) }, cue.id, false, {
         fileName: "<stdin>",
-        lineNumber: 332,
+        lineNumber: 331,
         columnNumber: 21
       });
     })
   ] }, void 0, true, {
     fileName: "<stdin>",
-    lineNumber: 269,
+    lineNumber: 268,
     columnNumber: 9
   });
 };
@@ -326,12 +325,12 @@ const mountReplay = (containerId, replayData) => {
       false,
       {
         fileName: "<stdin>",
-        lineNumber: 361,
+        lineNumber: 360,
         columnNumber: 13
       }
     ) }, void 0, false, {
       fileName: "<stdin>",
-      lineNumber: 360,
+      lineNumber: 359,
       columnNumber: 9
     })
   );
