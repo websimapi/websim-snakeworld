@@ -477,15 +477,20 @@ export class Game {
         if (frames.length > 0) {
             const lastFrame = frames[frames.length - 1];
             // Create a static frame copy with no events
-            // We use JSON parse/stringify to ensure a deep clone so no references are shared
-            const paddingFrame = JSON.parse(JSON.stringify(lastFrame));
-            paddingFrame.events = []; // Strip events
+            // We strip events to prevent the death sound from looping
+            const paddingFrame = {
+                ...lastFrame,
+                events: []
+            };
             
             const paddingFramesCount = 5 * this.RECORD_FPS; // 5 seconds padding
             for (let i = 0; i < paddingFramesCount; i++) {
                 frames.push(paddingFrame);
             }
         }
+
+        // Resolve absolute URLs for assets to ensure they work in the render context
+        const getAbsoluteUrl = (path) => new URL(path, window.location.href).href;
 
         return {
             frames: frames,
@@ -494,8 +499,8 @@ export class Game {
                 fps: this.RECORD_FPS,
                 playerInfo: this.playerInfo,
                 sounds: {
-                    eat: new URL('snake_eat.mp3', window.location.href).href,
-                    die: new URL('game_over.mp3', window.location.href).href
+                    eat: getAbsoluteUrl('./snake_eat.mp3'),
+                    die: getAbsoluteUrl('./game_over.mp3')
                 }
             }
         };

@@ -1,1 +1,353 @@
-{"content":"import React, { useEffect, useLayoutEffect, useRef, useState, useMemo } from 'react';\nimport { createRoot } from 'react-dom/client';\nimport { Player } from '@remotion/player';\nimport { AbsoluteFill, useCurrentFrame, useVideoConfig, Sequence } from 'remotion';\nimport * as THREE from 'three';\n\n// --- Audio System ---\n\nconst audioCtxRef = { current: null };\nconst audioBuffers = {};\nconst audioGainRef = { current: null };\nconst recordingDestRef = { current: null };\n\nconst initAudio = () => {\n    if (!audioCtxRef.current) {\n        const Ctx = window.AudioContext || window.webkitAudioContext;\n        audioCtxRef.current = new Ctx();\n        audioGainRef.current = audioCtxRef.current.createGain();\n        audioGainRef.current.connect(audioCtxRef.current.destination);\n    }\n    if (audioCtxRef.current.state === 'suspended') {\n        audioCtxRef.current.resume();\n    }\n};\n\nconst loadSounds = async (sounds) => {\n    initAudio();\n    const promises = Object.entries(sounds).map(async ([name, url]) => {\n        if (audioBuffers[name]) return;\n        try {\n            const res = await fetch(url);\n            const array = await res.arrayBuffer();\n            audioBuffers[name] = await audioCtxRef.current.decodeAudioData(array);\n        } catch (e) {\n            console.error(\"Failed to load replay sound\", name, e);\n        }\n    });\n    await Promise.all(promises);\n};\n\nconst playSound = (name) => {\n    if (!audioCtxRef.current || !audioBuffers[name]) return;\n    const source = audioCtxRef.current.createBufferSource();\n    source.buffer = audioBuffers[name];\n    source.connect(audioGainRef.current);\n    source.start(0);\n};\n\n// --- The Replay Composition ---\n\nexport const ReplayScene = ({ data }) => {\n    const frameIndex = useCurrentFrame();\n    const { width, height } = useVideoConfig();\n    const containerRef = useRef(null);\n    const lastFrameRef = useRef(-1);\n\n    // Load sounds once\n    useEffect(() => {\n        if (data.config.sounds) {\n            loadSounds(data.config.sounds);\n        }\n    }, [data]);\n\n    // Audio Trigger Logic\n    useEffect(() => {\n        const currentFrame = Math.floor(frameIndex);\n        \n        // Check for seek/loop\n        if (currentFrame < lastFrameRef.current) {\n            lastFrameRef.current = -1;\n        }\n\n        // Play sounds for the new frames we entered\n        // This handles cases where we might skip a frame due to lag, though Remotion tries to be precise\n        if (currentFrame > lastFrameRef.current) {\n            // Check all frames from last+1 to current\n            for (let f = lastFrameRef.current + 1; f <= currentFrame; f++) {\n                const frameData = data.frames[f];\n                if (frameData && frameData.events) {\n                    frameData.events.forEach(event => playSound(event));\n                }\n            }\n            lastFrameRef.current = currentFrame;\n        }\n    }, [frameIndex, data]);\n\n    // Refs to hold Three.js instances so we don't recreate them every frame\n    const sceneRef = useRef(null);\n    const cameraRef = useRef(null);\n    const rendererRef = useRef(null);\n    const objectsRef = useRef({\n        earth: null,\n        head: null,\n        food: null,\n        bonusFoods: [], // Array of meshes\n        segments: [],\n        cameraRig: null\n    });\n\n    // Initialize Three.js Scene\n    useEffect(() => {\n        if (!data || !data.frames || data.frames.length === 0) return;\n\n        const scene = new THREE.Scene();\n        sceneRef.current = scene;\n\n        // Camera\n        const camera = new THREE.PerspectiveCamera(60, width / height, 0.1, 1000);\n        cameraRef.current = camera;\n        \n        const cameraRig = new THREE.Group();\n        scene.add(cameraRig);\n        cameraRig.add(camera);\n        camera.position.z = 25;\n        camera.position.y = 10;\n        camera.lookAt(0, 0, 0);\n\n        // Renderer\n        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });\n        renderer.setSize(width, height);\n        renderer.setClearColor(0x000000, 1);\n        if (containerRef.current) {\n            containerRef.current.appendChild(renderer.domElement);\n        }\n        rendererRef.current = renderer;\n\n        // --- Recreate Game Assets ---\n        \n        // Lighting\n        const ambientLight = new THREE.AmbientLight(0xffffff, 0.5); \n        scene.add(ambientLight);\n        const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444, 1.0);\n        scene.add(hemiLight);\n\n        // Earth\n        const r = data.config.earthRadius;\n        const earthGeo = new THREE.SphereGeometry(r, 64, 64);\n        const earthMat = new THREE.MeshStandardMaterial({\n            color: 0x88ccff,\n            emissive: 0x002244,\n            emissiveIntensity: 0.8,\n            transparent: true,\n            opacity: 0.7,\n            roughness: 0.9,\n            side: THREE.DoubleSide\n        });\n        const earth = new THREE.Mesh(earthGeo, earthMat);\n        scene.add(earth);\n        \n        // Atmosphere\n        const atmGeo = new THREE.SphereGeometry(r * 1.03, 64, 64);\n        const atmMat = new THREE.MeshBasicMaterial({\n            color: 0x4488ff,\n            transparent: true,\n            opacity: 0.1,\n            side: THREE.BackSide\n        });\n        scene.add(new THREE.Mesh(atmGeo, atmMat));\n\n        // Snake Head\n        const headGeo = new THREE.BoxGeometry(0.8, 0.4, 0.8);\n        const headMat = new THREE.MeshStandardMaterial({ color: 0x00ff00, emissive: 0x004400 });\n        const head = new THREE.Mesh(headGeo, headMat);\n        scene.add(head);\n\n        // Food\n        const foodGeo = new THREE.SphereGeometry(0.5, 16, 16);\n        const foodMat = new THREE.MeshStandardMaterial({ color: 0xffaa00, emissive: 0xff0000, emissiveIntensity: 0.5 });\n        const food = new THREE.Mesh(foodGeo, foodMat);\n        scene.add(food);\n\n        // Reset objectsRef completely to avoid stale segments from previous renders\n        objectsRef.current = {\n            earth,\n            head,\n            food,\n            bonusFoods: [],\n            segments: [],\n            cameraRig\n        };\n\n        // Cleanup\n        return () => {\n            if (rendererRef.current) {\n                rendererRef.current.dispose();\n                rendererRef.current = null;\n            }\n            // Check if containerRef is still attached before accessing it\n            if (containerRef.current) {\n                containerRef.current.innerHTML = '';\n            }\n            // Nullify refs to prevent useLayoutEffect from using stale scene\n            sceneRef.current = null;\n        };\n    }, [width, height, data]);\n\n    // Update Frame\n    useLayoutEffect(() => {\n        // Strict checks to prevent crash during unmount or skip\n        if (!sceneRef.current || !rendererRef.current || !data.frames) return;\n        \n        // Clamp frame index\n        const safeIndex = Math.min(Math.floor(frameIndex), data.frames.length - 1);\n        if (safeIndex < 0) return;\n\n        const frameData = data.frames[safeIndex];\n        const objs = objectsRef.current;\n\n        // Safety check if objects are ready\n        if (!objs.head || !objs.food) return;\n\n        // Update Head\n        objs.head.position.fromArray(frameData.head.pos);\n        objs.head.quaternion.fromArray(frameData.head.quat);\n\n        // Update Food\n        objs.food.position.fromArray(frameData.food);\n\n        // Update Bonus Foods (Yellow)\n        const bonusData = frameData.bonusFoods || [];\n        \n        // Sync Bonus Food Count\n        while (objs.bonusFoods.length < bonusData.length) {\n            const bGeo = new THREE.SphereGeometry(0.25, 8, 8);\n            const bMat = new THREE.MeshStandardMaterial({ \n                color: 0xffff00, \n                emissive: 0xffaa00,\n                emissiveIntensity: 0.5 \n            });\n            const mesh = new THREE.Mesh(bGeo, bMat);\n            sceneRef.current.add(mesh);\n            objs.bonusFoods.push(mesh);\n        }\n        while (objs.bonusFoods.length > bonusData.length) {\n            const mesh = objs.bonusFoods.pop();\n            if (mesh) {\n                sceneRef.current.remove(mesh);\n                if (mesh.geometry) mesh.geometry.dispose();\n                if (mesh.material) mesh.material.dispose();\n            }\n        }\n        \n        // Update Bonus positions\n        bonusData.forEach((pos, i) => {\n            if (objs.bonusFoods[i]) {\n                objs.bonusFoods[i].position.fromArray(pos);\n            }\n        });\n\n        // Update Segments\n        // Sync segment count (Grow)\n        while (objs.segments.length < frameData.segments.length) {\n            const segGeo = new THREE.BoxGeometry(0.6, 0.3, 0.6);\n            // Get color from data or default\n            const colorHex = frameData.segments[objs.segments.length].color;\n            const segMat = new THREE.MeshStandardMaterial({ color: colorHex });\n            const segment = new THREE.Mesh(segGeo, segMat);\n            sceneRef.current.add(segment);\n            objs.segments.push(segment);\n        }\n\n        // Sync segment count (Shrink)\n        while (objs.segments.length > frameData.segments.length) {\n            const segment = objs.segments.pop();\n            // Check if segment exists and scene is valid\n            if (segment && sceneRef.current) {\n                sceneRef.current.remove(segment);\n                if (segment.geometry) segment.geometry.dispose();\n                if (segment.material) segment.material.dispose();\n            }\n        }\n\n        // Update transforms\n        frameData.segments.forEach((segData, i) => {\n            if (objs.segments[i]) {\n                objs.segments[i].position.fromArray(segData.pos);\n                objs.segments[i].quaternion.fromArray(segData.quat);\n                if (segData.color !== undefined) {\n                    objs.segments[i].material.color.setHex(segData.color);\n                }\n            }\n        });\n\n        // Update Camera\n        if (frameData.camera && cameraRef.current) {\n            cameraRef.current.position.fromArray(frameData.camera.pos);\n            cameraRef.current.quaternion.fromArray(frameData.camera.quat);\n            cameraRef.current.up.fromArray(frameData.camera.up);\n        } else if (cameraRef.current) {\n            // Fallback for old data\n            const headPos = objs.head.position.clone();\n            const idealCameraPos = headPos.clone().normalize().multiplyScalar(30);\n            const cam = cameraRef.current;\n            cam.position.lerp(idealCameraPos, 0.1);\n            cam.lookAt(0, 0, 0);\n            const snakeForward = new THREE.Vector3(0, 0, 1).applyQuaternion(objs.head.quaternion);\n            cam.up.copy(snakeForward);\n        }\n\n        if (rendererRef.current && sceneRef.current && cameraRef.current) {\n            rendererRef.current.render(sceneRef.current, cameraRef.current);\n        }\n\n    }, [frameIndex, data]);\n\n    // Derived state for UI\n    const currentFrameData = data.frames[Math.min(Math.floor(frameIndex), data.frames.length - 1)] || {};\n    const score = currentFrameData.score || 0;\n    const playerInfo = data.config.playerInfo || { username: 'Player', avatarUrl: 'https://via.placeholder.com/64' };\n\n    if (!data) return null;\n\n    return (\n        <AbsoluteFill>\n            <div ref={containerRef} style={{ width: '100%', height: '100%' }} />\n            \n            {/* Player Info Overlay */}\n            <div style={{\n                position: 'absolute',\n                top: '20px',\n                left: '20px',\n                display: 'flex',\n                alignItems: 'flex-start',\n                gap: '15px',\n                pointerEvents: 'none',\n                fontFamily: \"'Segoe UI', Tahoma, Geneva, Verdana, sans-serif\"\n            }}>\n                <div style={{\n                    display: 'flex',\n                    flexDirection: 'column',\n                    alignItems: 'center',\n                    gap: '5px'\n                }}>\n                    <img \n                        src={playerInfo.avatarUrl || 'https://via.placeholder.com/64'} \n                        style={{\n                            width: '64px',\n                            height: '64px',\n                            borderRadius: '50%',\n                            border: '3px solid white',\n                            backgroundColor: '#333',\n                            objectFit: 'cover',\n                            boxShadow: '0 4px 6px rgba(0,0,0,0.3)'\n                        }}\n                    />\n                    <div style={{\n                        color: 'white',\n                        fontSize: '14px',\n                        fontWeight: '600',\n                        textShadow: '1px 1px 2px rgba(0,0,0,0.8)',\n                        background: 'rgba(0,0,0,0.5)',\n                        padding: '2px 6px',\n                        borderRadius: '4px',\n                        maxWidth: '100px',\n                        overflow: 'hidden',\n                        textOverflow: 'ellipsis',\n                        whiteSpace: 'nowrap'\n                    }}>\n                        {playerInfo.username}\n                    </div>\n                </div>\n                <div style={{\n                    fontSize: '48px',\n                    color: 'white',\n                    fontWeight: 'bold',\n                    textShadow: '2px 2px 4px rgba(0,0,0,0.5)',\n                    alignSelf: 'flex-start',\n                    marginTop: '10px'\n                }}>\n                    {score}\n                </div>\n            </div>\n\n        </AbsoluteFill>\n    );\n};\n\n// --- Entry Point ---\n\nlet replayRoot = null;\nlet playerRef = null;\nlet currentDuration = 0;\n\nexport const mountReplay = (containerId, replayData) => {\n    const container = document.getElementById(containerId);\n    if (!container) return;\n\n    // Destroy existing root if any\n    if (replayRoot) {\n        replayRoot.unmount();\n    }\n\n    replayRoot = createRoot(container);\n    \n    const duration = replayData.frames.length;\n    currentDuration = duration;\n    const fps = replayData.config.fps || 30;\n    \n    // Create a ref object to hold the player instance\n    playerRef = { current: null };\n\n    replayRoot.render(\n        <div style={{ width: \"100%\", height: \"100%\", background: \"#000\" }}>\n            <Player\n                ref={playerRef}\n                component={ReplayScene}\n                inputProps={{ data: replayData }}\n                durationInFrames={duration}\n                fps={fps}\n                compositionWidth={window.innerWidth}\n                compositionHeight={window.innerHeight}\n                style={{ width: \"100%\", height: \"100%\" }}\n                controls\n                loop\n                autoPlay\n            />\n        </div>\n    );\n};\n\nexport const unmountReplay = () => {\n    if (replayRoot) {\n        replayRoot.unmount();\n        replayRoot = null;\n        playerRef = null;\n    }\n};\n\nexport const downloadRecording = async () => {\n    if (!playerRef || !playerRef.current) {\n        throw new Error(\"Player not initialized\");\n    }\n\n    const canvas = document.querySelector('#replay-root canvas');\n    if (!canvas) {\n        throw new Error(\"Canvas not found\");\n    }\n\n    // Ensure audio is initialized and get destination\n    initAudio();\n    if (!recordingDestRef.current) {\n        recordingDestRef.current = audioCtxRef.current.createMediaStreamDestination();\n    }\n    // Connect gain to recording dest\n    audioGainRef.current.connect(recordingDestRef.current);\n\n    // Pause and rewind\n    playerRef.current.pause();\n    playerRef.current.seekTo(0);\n    \n    // Allow a moment for the seek to render and buffers to load\n    await new Promise(r => setTimeout(r, 800));\n\n    // Setup MediaRecorder with combined stream\n    const videoStream = canvas.captureStream(30); // 30 FPS\n    const audioStream = recordingDestRef.current.stream;\n    \n    // Combine tracks\n    const combinedStream = new MediaStream([\n        ...videoStream.getVideoTracks(),\n        ...audioStream.getAudioTracks()\n    ]);\n\n    const mimeType = MediaRecorder.isTypeSupported('video/webm; codecs=vp9') \n        ? 'video/webm; codecs=vp9' \\n        : 'video/webm';\n\n    const recorder = new MediaRecorder(combinedStream, { \n        mimeType,\n        videoBitsPerSecond: 5000000 // 5 Mbps\n    });\n    \n    const chunks = [];\n    recorder.ondataavailable = (e) => {\n        if (e.data.size > 0) chunks.push(e.data);\n    };\n\n    const recordingPromise = new Promise((resolve) => {\n        recorder.onstop = () => {\n            // Disconnect recording dest\n            audioGainRef.current.disconnect(recordingDestRef.current);\n            \n            const blob = new Blob(chunks, { type: 'video/webm' });\n            const url = URL.createObjectURL(blob);\n            const a = document.createElement('a');\n            a.href = url;\n            a.download = `snake-replay-${Date.now()}.webm`;\n            document.body.appendChild(a);\n            a.click();\n            document.body.removeChild(a);\n            URL.revokeObjectURL(url);\n            resolve();\n        };\n    });\n\n    recorder.start();\n    playerRef.current.play();\n\n    // Poll for completion\n    const pollInterval = setInterval(() => {\n        if (!playerRef.current) {\n            clearInterval(pollInterval);\n            try { recorder.stop(); } catch(e){}\n            return;\n        }\n\n        const frame = playerRef.current.getCurrentFrame();\n        // Check if we reached the end\n        if (frame >= currentDuration - 1) {\n            clearInterval(pollInterval);\n            recorder.stop();\n            playerRef.current.pause();\n        }\n    }, 50);\n\n    return recordingPromise;\n};"}
+import { jsxDEV } from "react/jsx-dev-runtime";
+import React, { useEffect, useLayoutEffect, useRef, useState, useMemo } from "react";
+import { createRoot } from "react-dom/client";
+import { Player } from "@websim/remotion/player";
+import { AbsoluteFill, useCurrentFrame, useVideoConfig, Audio, Sequence } from "remotion";
+import * as THREE from "three";
+const ReplayScene = ({ data }) => {
+  const frameIndex = useCurrentFrame();
+  const { width, height } = useVideoConfig();
+  const containerRef = useRef(null);
+  const audioCues = useMemo(() => {
+    const cues = [];
+    if (!data || !data.frames) return cues;
+    data.frames.forEach((frame, idx) => {
+      if (frame.events && frame.events.length > 0) {
+        frame.events.forEach((soundName, i) => {
+          const url = data.config.sounds && data.config.sounds[soundName];
+          if (url) {
+            cues.push({
+              id: `sfx-${idx}-${i}-${soundName}`,
+              frame: idx,
+              src: url,
+              name: soundName
+            });
+          }
+        });
+      }
+    });
+    return cues;
+  }, [data]);
+  const activeCues = audioCues.filter((cue) => {
+    const duration = cue.name === "die" ? 150 : 30;
+    return frameIndex >= cue.frame && frameIndex < cue.frame + duration;
+  });
+  const sceneRef = useRef(null);
+  const cameraRef = useRef(null);
+  const rendererRef = useRef(null);
+  const objectsRef = useRef({
+    earth: null,
+    head: null,
+    food: null,
+    bonusFoods: [],
+    // Array of meshes
+    segments: [],
+    cameraRig: null
+  });
+  useEffect(() => {
+    if (!data || !data.frames || data.frames.length === 0) return;
+    const scene = new THREE.Scene();
+    sceneRef.current = scene;
+    const camera = new THREE.PerspectiveCamera(60, width / height, 0.1, 1e3);
+    cameraRef.current = camera;
+    const cameraRig = new THREE.Group();
+    scene.add(cameraRig);
+    cameraRig.add(camera);
+    camera.position.z = 25;
+    camera.position.y = 10;
+    camera.lookAt(0, 0, 0);
+    const renderer = new THREE.WebGLRenderer({
+      antialias: true,
+      alpha: true,
+      preserveDrawingBuffer: true
+    });
+    renderer.setSize(width, height);
+    renderer.setClearColor(0, 1);
+    if (containerRef.current) {
+      containerRef.current.appendChild(renderer.domElement);
+    }
+    rendererRef.current = renderer;
+    const ambientLight = new THREE.AmbientLight(16777215, 0.5);
+    scene.add(ambientLight);
+    const hemiLight = new THREE.HemisphereLight(16777215, 4473924, 1);
+    scene.add(hemiLight);
+    const r = data.config.earthRadius;
+    const earthGeo = new THREE.SphereGeometry(r, 64, 64);
+    const earthMat = new THREE.MeshStandardMaterial({
+      color: 8965375,
+      emissive: 8772,
+      emissiveIntensity: 0.8,
+      transparent: true,
+      opacity: 0.7,
+      roughness: 0.9,
+      side: THREE.DoubleSide
+    });
+    const earth = new THREE.Mesh(earthGeo, earthMat);
+    scene.add(earth);
+    const atmGeo = new THREE.SphereGeometry(r * 1.03, 64, 64);
+    const atmMat = new THREE.MeshBasicMaterial({
+      color: 4491519,
+      transparent: true,
+      opacity: 0.1,
+      side: THREE.BackSide
+    });
+    scene.add(new THREE.Mesh(atmGeo, atmMat));
+    const headGeo = new THREE.BoxGeometry(0.8, 0.4, 0.8);
+    const headMat = new THREE.MeshStandardMaterial({ color: 65280, emissive: 17408 });
+    const head = new THREE.Mesh(headGeo, headMat);
+    scene.add(head);
+    const foodGeo = new THREE.SphereGeometry(0.5, 16, 16);
+    const foodMat = new THREE.MeshStandardMaterial({ color: 16755200, emissive: 16711680, emissiveIntensity: 0.5 });
+    const food = new THREE.Mesh(foodGeo, foodMat);
+    scene.add(food);
+    objectsRef.current = {
+      earth,
+      head,
+      food,
+      bonusFoods: [],
+      segments: [],
+      cameraRig
+    };
+    return () => {
+      if (rendererRef.current) {
+        rendererRef.current.dispose();
+        rendererRef.current = null;
+      }
+      if (containerRef.current) {
+        containerRef.current.innerHTML = "";
+      }
+      sceneRef.current = null;
+    };
+  }, [width, height, data]);
+  useLayoutEffect(() => {
+    if (!sceneRef.current || !rendererRef.current || !data.frames) return;
+    const safeIndex = Math.min(Math.floor(frameIndex), data.frames.length - 1);
+    if (safeIndex < 0) return;
+    const frameData = data.frames[safeIndex];
+    const objs = objectsRef.current;
+    if (!objs.head || !objs.food) return;
+    objs.head.position.fromArray(frameData.head.pos);
+    objs.head.quaternion.fromArray(frameData.head.quat);
+    objs.food.position.fromArray(frameData.food);
+    const bonusData = frameData.bonusFoods || [];
+    while (objs.bonusFoods.length < bonusData.length) {
+      const bGeo = new THREE.SphereGeometry(0.25, 8, 8);
+      const bMat = new THREE.MeshStandardMaterial({
+        color: 16776960,
+        emissive: 16755200,
+        emissiveIntensity: 0.5
+      });
+      const mesh = new THREE.Mesh(bGeo, bMat);
+      sceneRef.current.add(mesh);
+      objs.bonusFoods.push(mesh);
+    }
+    while (objs.bonusFoods.length > bonusData.length) {
+      const mesh = objs.bonusFoods.pop();
+      if (mesh) {
+        sceneRef.current.remove(mesh);
+        if (mesh.geometry) mesh.geometry.dispose();
+        if (mesh.material) mesh.material.dispose();
+      }
+    }
+    bonusData.forEach((pos, i) => {
+      if (objs.bonusFoods[i]) {
+        objs.bonusFoods[i].position.fromArray(pos);
+      }
+    });
+    while (objs.segments.length < frameData.segments.length) {
+      const segGeo = new THREE.BoxGeometry(0.6, 0.3, 0.6);
+      const colorHex = frameData.segments[objs.segments.length].color;
+      const segMat = new THREE.MeshStandardMaterial({ color: colorHex });
+      const segment = new THREE.Mesh(segGeo, segMat);
+      sceneRef.current.add(segment);
+      objs.segments.push(segment);
+    }
+    while (objs.segments.length > frameData.segments.length) {
+      const segment = objs.segments.pop();
+      if (segment && sceneRef.current) {
+        sceneRef.current.remove(segment);
+        if (segment.geometry) segment.geometry.dispose();
+        if (segment.material) segment.material.dispose();
+      }
+    }
+    frameData.segments.forEach((segData, i) => {
+      if (objs.segments[i]) {
+        objs.segments[i].position.fromArray(segData.pos);
+        objs.segments[i].quaternion.fromArray(segData.quat);
+        if (segData.color !== void 0) {
+          objs.segments[i].material.color.setHex(segData.color);
+        }
+      }
+    });
+    if (frameData.camera && cameraRef.current) {
+      cameraRef.current.position.fromArray(frameData.camera.pos);
+      cameraRef.current.quaternion.fromArray(frameData.camera.quat);
+      cameraRef.current.up.fromArray(frameData.camera.up);
+    } else if (cameraRef.current) {
+      const headPos = objs.head.position.clone();
+      const idealCameraPos = headPos.clone().normalize().multiplyScalar(30);
+      const cam = cameraRef.current;
+      cam.position.lerp(idealCameraPos, 0.1);
+      cam.lookAt(0, 0, 0);
+      const snakeForward = new THREE.Vector3(0, 0, 1).applyQuaternion(objs.head.quaternion);
+      cam.up.copy(snakeForward);
+    }
+    if (rendererRef.current && sceneRef.current && cameraRef.current) {
+      rendererRef.current.render(sceneRef.current, cameraRef.current);
+    }
+  }, [frameIndex, data]);
+  const currentFrameData = data.frames[Math.min(Math.floor(frameIndex), data.frames.length - 1)] || {};
+  const score = currentFrameData.score || 0;
+  const playerInfo = data.config.playerInfo || { username: "Player", avatarUrl: "https://via.placeholder.com/64" };
+  return /* @__PURE__ */ jsxDEV(AbsoluteFill, { children: [
+    /* @__PURE__ */ jsxDEV("div", { ref: containerRef, style: { width: "100%", height: "100%" } }, void 0, false, {
+      fileName: "<stdin>",
+      lineNumber: 274,
+      columnNumber: 13
+    }),
+    /* @__PURE__ */ jsxDEV("div", { style: {
+      position: "absolute",
+      top: "20px",
+      left: "20px",
+      display: "flex",
+      alignItems: "flex-start",
+      gap: "15px",
+      pointerEvents: "none",
+      fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif"
+    }, children: [
+      /* @__PURE__ */ jsxDEV("div", { style: {
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        gap: "5px"
+      }, children: [
+        /* @__PURE__ */ jsxDEV(
+          "img",
+          {
+            src: playerInfo.avatarUrl || "https://via.placeholder.com/64",
+            crossOrigin: "anonymous",
+            style: {
+              width: "64px",
+              height: "64px",
+              borderRadius: "50%",
+              border: "3px solid white",
+              backgroundColor: "#333",
+              objectFit: "cover",
+              boxShadow: "0 4px 6px rgba(0,0,0,0.3)"
+            }
+          },
+          void 0,
+          false,
+          {
+            fileName: "<stdin>",
+            lineNumber: 293,
+            columnNumber: 21
+          }
+        ),
+        /* @__PURE__ */ jsxDEV("div", { style: {
+          color: "white",
+          fontSize: "14px",
+          fontWeight: "600",
+          textShadow: "1px 1px 2px rgba(0,0,0,0.8)",
+          background: "rgba(0,0,0,0.5)",
+          padding: "2px 6px",
+          borderRadius: "4px",
+          maxWidth: "100px",
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+          whiteSpace: "nowrap"
+        }, children: playerInfo.username }, void 0, false, {
+          fileName: "<stdin>",
+          lineNumber: 306,
+          columnNumber: 21
+        })
+      ] }, void 0, true, {
+        fileName: "<stdin>",
+        lineNumber: 287,
+        columnNumber: 17
+      }),
+      /* @__PURE__ */ jsxDEV("div", { style: {
+        fontSize: "48px",
+        color: "white",
+        fontWeight: "bold",
+        textShadow: "2px 2px 4px rgba(0,0,0,0.5)",
+        alignSelf: "flex-start",
+        marginTop: "10px"
+      }, children: score }, void 0, false, {
+        fileName: "<stdin>",
+        lineNumber: 322,
+        columnNumber: 17
+      })
+    ] }, void 0, true, {
+      fileName: "<stdin>",
+      lineNumber: 277,
+      columnNumber: 13
+    }),
+    activeCues.map((cue) => {
+      const duration = cue.name === "die" ? 150 : 30;
+      return /* @__PURE__ */ jsxDEV(Sequence, { from: cue.frame, durationInFrames: duration, children: /* @__PURE__ */ jsxDEV(Audio, { src: cue.src }, void 0, false, {
+        fileName: "<stdin>",
+        lineNumber: 338,
+        columnNumber: 25
+      }) }, cue.id, false, {
+        fileName: "<stdin>",
+        lineNumber: 337,
+        columnNumber: 21
+      });
+    })
+  ] }, void 0, true, {
+    fileName: "<stdin>",
+    lineNumber: 273,
+    columnNumber: 9
+  });
+};
+let replayRoot = null;
+const mountReplay = (containerId, replayData) => {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  if (replayRoot) {
+    replayRoot.unmount();
+  }
+  replayRoot = createRoot(container);
+  const duration = replayData.frames.length;
+  const fps = replayData.config.fps || 30;
+  replayRoot.render(
+    /* @__PURE__ */ jsxDEV("div", { style: { width: "100%", height: "100%", background: "#000" }, children: /* @__PURE__ */ jsxDEV(
+      Player,
+      {
+        component: ReplayScene,
+        inputProps: { data: replayData },
+        durationInFrames: duration,
+        fps,
+        compositionWidth: window.innerWidth,
+        compositionHeight: window.innerHeight,
+        style: { width: "100%", height: "100%" },
+        controls: true,
+        loop: true,
+        autoPlay: true,
+        numberOfSharedAudioTags: 20
+      },
+      void 0,
+      false,
+      {
+        fileName: "<stdin>",
+        lineNumber: 366,
+        columnNumber: 13
+      }
+    ) }, void 0, false, {
+      fileName: "<stdin>",
+      lineNumber: 365,
+      columnNumber: 9
+    })
+  );
+};
+const unmountReplay = () => {
+  if (replayRoot) {
+    replayRoot.unmount();
+    replayRoot = null;
+  }
+};
+export {
+  mountReplay,
+  unmountReplay
+};

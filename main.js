@@ -135,26 +135,6 @@ document.getElementById('btn-replay').addEventListener('click', async (e) => {
     mountReplay('replay-root', data);
 });
 
-// Download Replay
-document.getElementById('download-replay').addEventListener('click', async (e) => {
-    e.stopPropagation();
-    const btn = e.target;
-    const originalText = btn.textContent;
-    btn.textContent = "Recording...";
-    btn.disabled = true;
-
-    try {
-        const { downloadRecording } = await import('./replay.jsx');
-        await downloadRecording();
-    } catch (err) {
-        console.error("Recording failed", err);
-        alert("Failed to record replay. Browser may not support canvas capture.");
-    } finally {
-        btn.textContent = originalText;
-        btn.disabled = false;
-    }
-});
-
 // Close Replay
 document.getElementById('close-replay').addEventListener('click', async () => {
     // Hide Replay
