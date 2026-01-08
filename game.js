@@ -29,6 +29,8 @@ export class Game {
 
         // Replay Data
         this.replayData = [];
+        this.RECORD_FPS = 30;
+        this.recordAccumulator = 0;
         
         // Movement
         this.currentDir = new THREE.Vector3(1, 0, 0); // Local tangent direction
@@ -114,6 +116,7 @@ export class Game {
         this.segments = [];
         this.pathHistory = [];
         this.replayData = []; // Clear previous recording
+        this.recordAccumulator = 0;
         
         // Reset Head
         this.head.position.set(0, this.EARTH_RADIUS, 0);
@@ -123,6 +126,13 @@ export class Game {
         // Set initial direction (Tangent X)
         this.currentDir.set(1, 0, 0);
         this.targetPoint = null;
+
+        // Reset Camera immediately
+        const idealCameraPos = this.head.position.clone().normalize().multiplyScalar(30);
+        this.camera.position.copy(idealCameraPos);
+        this.camera.lookAt(0,0,0);
+        const snakeForward = new THREE.Vector3(0, 0, 1).applyQuaternion(this.head.quaternion);
+        this.camera.up.copy(snakeForward);
         
         this.score = 0;
         this.isGameOver = false;
@@ -317,8 +327,21 @@ export class Game {
         // 7. Pulse Food
         this.food.scale.setScalar(1 + Math.sin(Date.now() * 0.01) * 0.2);
 
+        // 7.5 Update Camera (Moved from main.js for consistency)
+        const idealCameraPos = this.head.position.clone().normalize().multiplyScalar(30);
+        this.camera.position.lerp(idealCameraPos, 2.0 * dt);
+        this.camera.lookAt(0, 0, 0);
+        
+        // Align up vector with snake forward to prevent orientation flipping
+        const snakeForward = new THREE.Vector3(0, 0, 1).applyQuaternion(this.head.quaternion);
+        this.camera.up.copy(snakeForward);
+
         // 8. Record Frame for Replay
-        this.recordFrame();
+        this.recordAccumulator += dt;
+        if (this.recordAccumulator >= 1 / this.RECORD_FPS) {
+            this.recordFrame();
+            this.recordAccumulator = 0; // Reset
+        }
     }
 
     recordFrame() {
@@ -327,6 +350,11 @@ export class Game {
             head: {
                 pos: this.head.position.toArray(),
                 quat: this.head.quaternion.toArray()
+            },
+            camera: {
+                pos: this.camera.position.toArray(),
+                quat: this.camera.quaternion.toArray(),
+                up: this.camera.up.toArray()
             },
             food: this.food.position.toArray(),
             segments: this.segments.map(seg => ({
@@ -342,7 +370,8 @@ export class Game {
         return {
             frames: this.replayData,
             config: {
-                earthRadius: this.EARTH_RADIUS
+                earthRadius: this.EARTH_RADIUS,
+                fps: this.RECORD_FPS
             }
         };
     }

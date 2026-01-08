@@ -1,5 +1,5 @@
 import { jsxDEV } from "react/jsx-dev-runtime";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { Player } from "@websim/remotion/player";
 import { AbsoluteFill, useCurrentFrame, useVideoConfig } from "remotion";
@@ -79,7 +79,7 @@ const ReplayScene = ({ data }) => {
       }
     };
   }, [width, height, data]);
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!sceneRef.current || !data.frames) return;
     const safeIndex = Math.min(Math.floor(frameIndex), data.frames.length - 1);
     if (safeIndex < 0) return;
@@ -100,16 +100,25 @@ const ReplayScene = ({ data }) => {
       if (objs.segments[i]) {
         objs.segments[i].position.fromArray(segData.pos);
         objs.segments[i].quaternion.fromArray(segData.quat);
+        if (segData.color !== void 0) {
+          objs.segments[i].material.color.setHex(segData.color);
+        }
       }
     });
-    const headPos = objs.head.position.clone();
-    const idealCameraPos = headPos.clone().normalize().multiplyScalar(30);
-    const cam = cameraRef.current;
-    cam.position.lerp(idealCameraPos, 0.1);
-    cam.lookAt(0, 0, 0);
-    const snakeForward = new THREE.Vector3(0, 0, 1).applyQuaternion(objs.head.quaternion);
-    cam.up.copy(snakeForward);
-    rendererRef.current.render(sceneRef.current, cam);
+    if (frameData.camera) {
+      cameraRef.current.position.fromArray(frameData.camera.pos);
+      cameraRef.current.quaternion.fromArray(frameData.camera.quat);
+      cameraRef.current.up.fromArray(frameData.camera.up);
+    } else {
+      const headPos = objs.head.position.clone();
+      const idealCameraPos = headPos.clone().normalize().multiplyScalar(30);
+      const cam = cameraRef.current;
+      cam.position.lerp(idealCameraPos, 0.1);
+      cam.lookAt(0, 0, 0);
+      const snakeForward = new THREE.Vector3(0, 0, 1).applyQuaternion(objs.head.quaternion);
+      cam.up.copy(snakeForward);
+    }
+    rendererRef.current.render(sceneRef.current, cameraRef.current);
   }, [frameIndex, data]);
   return /* @__PURE__ */ jsxDEV("div", { ref: containerRef, style: { width: "100%", height: "100%" } }, void 0, false, {
     fileName: "<stdin>",
@@ -126,6 +135,7 @@ const mountReplay = (containerId, replayData) => {
   }
   replayRoot = createRoot(container);
   const duration = replayData.frames.length;
+  const fps = replayData.config.fps || 30;
   replayRoot.render(
     /* @__PURE__ */ jsxDEV("div", { style: { width: "100%", height: "100%", background: "#000" }, children: /* @__PURE__ */ jsxDEV(
       Player,
@@ -133,7 +143,7 @@ const mountReplay = (containerId, replayData) => {
         component: ReplayScene,
         inputProps: { data: replayData },
         durationInFrames: duration,
-        fps: 60,
+        fps,
         compositionWidth: window.innerWidth,
         compositionHeight: window.innerHeight,
         style: { width: "100%", height: "100%" },
@@ -145,12 +155,12 @@ const mountReplay = (containerId, replayData) => {
       false,
       {
         fileName: "<stdin>",
-        lineNumber: 192,
+        lineNumber: 193,
         columnNumber: 13
       }
     ) }, void 0, false, {
       fileName: "<stdin>",
-      lineNumber: 191,
+      lineNumber: 192,
       columnNumber: 9
     })
   );
