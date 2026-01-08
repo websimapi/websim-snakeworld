@@ -70,11 +70,12 @@ const ReplayScene = ({ data }) => {
     const r = data.config.earthRadius;
     const earthGeo = new THREE.SphereGeometry(r, 64, 64);
     const earthMat = new THREE.MeshStandardMaterial({
-      color: 4491519,
+      color: 8965375,
+      emissive: 8772,
+      emissiveIntensity: 0.8,
       transparent: true,
-      opacity: 0.15,
-      roughness: 0.1,
-      metalness: 0.5,
+      opacity: 0.7,
+      roughness: 0.9,
       side: THREE.DoubleSide
     });
     const earth = new THREE.Mesh(earthGeo, earthMat);
@@ -193,11 +194,11 @@ const ReplayScene = ({ data }) => {
   }, [frameIndex, data]);
   const currentFrameData = data.frames[Math.min(Math.floor(frameIndex), data.frames.length - 1)] || {};
   const score = currentFrameData.score || 0;
-  const playerInfo = data.config.playerInfo || { username: "Player", avatarUrl: "default_avatar.png" };
+  const playerInfo = data.config.playerInfo || { username: "Player", avatarUrl: "./default_avatar.png" };
   return /* @__PURE__ */ jsxDEV(AbsoluteFill, { children: [
     /* @__PURE__ */ jsxDEV("div", { ref: containerRef, style: { width: "100%", height: "100%" } }, void 0, false, {
       fileName: "<stdin>",
-      lineNumber: 269,
+      lineNumber: 270,
       columnNumber: 13
     }),
     /* @__PURE__ */ jsxDEV("div", { style: {
@@ -219,7 +220,7 @@ const ReplayScene = ({ data }) => {
         /* @__PURE__ */ jsxDEV(
           "img",
           {
-            src: playerInfo.avatarUrl || "default_avatar.png",
+            src: playerInfo.avatarUrl || "./default_avatar.png",
             style: {
               width: "64px",
               height: "64px",
@@ -234,7 +235,7 @@ const ReplayScene = ({ data }) => {
           false,
           {
             fileName: "<stdin>",
-            lineNumber: 288,
+            lineNumber: 289,
             columnNumber: 21
           }
         ),
@@ -252,12 +253,12 @@ const ReplayScene = ({ data }) => {
           whiteSpace: "nowrap"
         }, children: playerInfo.username }, void 0, false, {
           fileName: "<stdin>",
-          lineNumber: 300,
+          lineNumber: 301,
           columnNumber: 21
         })
       ] }, void 0, true, {
         fileName: "<stdin>",
-        lineNumber: 282,
+        lineNumber: 283,
         columnNumber: 17
       }),
       /* @__PURE__ */ jsxDEV("div", { style: {
@@ -269,29 +270,29 @@ const ReplayScene = ({ data }) => {
         marginTop: "10px"
       }, children: score }, void 0, false, {
         fileName: "<stdin>",
-        lineNumber: 316,
+        lineNumber: 317,
         columnNumber: 17
       })
     ] }, void 0, true, {
       fileName: "<stdin>",
-      lineNumber: 272,
+      lineNumber: 273,
       columnNumber: 13
     }),
     activeCues.map((cue) => {
       const duration = cue.name === "die" ? 150 : 30;
       return /* @__PURE__ */ jsxDEV(Sequence, { from: cue.frame, durationInFrames: duration, children: /* @__PURE__ */ jsxDEV(Audio, { src: cue.src }, void 0, false, {
         fileName: "<stdin>",
-        lineNumber: 332,
+        lineNumber: 333,
         columnNumber: 25
       }) }, cue.id, false, {
         fileName: "<stdin>",
-        lineNumber: 331,
+        lineNumber: 332,
         columnNumber: 21
       });
     })
   ] }, void 0, true, {
     fileName: "<stdin>",
-    lineNumber: 268,
+    lineNumber: 269,
     columnNumber: 9
   });
 };
@@ -325,12 +326,12 @@ const mountReplay = (containerId, replayData) => {
       false,
       {
         fileName: "<stdin>",
-        lineNumber: 360,
+        lineNumber: 361,
         columnNumber: 13
       }
     ) }, void 0, false, {
       fileName: "<stdin>",
-      lineNumber: 359,
+      lineNumber: 360,
       columnNumber: 9
     })
   );

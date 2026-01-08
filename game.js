@@ -34,7 +34,7 @@ export class Game {
         this.bonusFoods = []; // Array of meshes for yellow food
         
         // Player Info
-        this.playerInfo = { username: 'Player', avatarUrl: 'default_avatar.png' };
+        this.playerInfo = { username: 'Player', avatarUrl: '' };
 
         // Replay Data
         this.replayData = [];
@@ -88,14 +88,16 @@ export class Game {
         this.loadSound('eat', './snake_eat.mp3');
         this.loadSound('die', './game_over.mp3');
 
-        // Create Earth (Transparent)
+        // Create Earth
         const geometry = new THREE.SphereGeometry(this.EARTH_RADIUS, 64, 64);
         const material = new THREE.MeshStandardMaterial({
-            color: 0x4488ff,
+            color: 0x88ccff,
+            emissive: 0x002244, // Slight internal glow to act as "the light"
+            emissiveIntensity: 0.8,
             transparent: true,
-            opacity: 0.15,
-            roughness: 0.1,
-            metalness: 0.5,
+            opacity: 0.7,
+            roughness: 0.9, // Matte surface to prevent sun glare
+            metalness: 0.0,
             side: THREE.DoubleSide
         });
         this.earth = new THREE.Mesh(geometry, material);
