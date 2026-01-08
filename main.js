@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { Game } from './game.js';
-import { initLoader } from './loader.js';
+import { initLoader, showLoader, hideLoader } from './loader.js';
 
 // Start Loading Screen immediately
 initLoader();
@@ -156,19 +156,31 @@ document.getElementById('btn-restart').addEventListener('click', (e) => {
 document.getElementById('btn-replay').addEventListener('click', async (e) => {
     e.stopPropagation();
     
-    // Hide Game UI
-    document.getElementById('ui-layer').classList.add('hidden');
-    document.getElementById('game-container').classList.add('hidden');
+    // 1. Show Loading Screen to mask the heavy loading
+    showLoader();
     
-    // Show Replay
-    replayContainer.classList.remove('hidden');
-    
-    // Load Replay Logic
-    // We use dynamic import for the JSX/Remotion module
-    const { mountReplay } = await import('./replay.jsx');
-    
-    const data = game.getReplayJSON();
-    mountReplay('replay-root', data);
+    // 2. Wait for fade-in (600ms) before doing work
+    setTimeout(async () => {
+        // Hide Game UI
+        document.getElementById('ui-layer').classList.add('hidden');
+        document.getElementById('game-container').classList.add('hidden');
+        
+        // Show Replay Container
+        replayContainer.classList.remove('hidden');
+        
+        // Load Replay Logic
+        // We use dynamic import for the JSX/Remotion module
+        const { mountReplay } = await import('./replay.jsx');
+        
+        const data = game.getReplayJSON();
+        mountReplay('replay-root', data);
+        
+        // 3. Hide Loading Screen (fade out)
+        // Give Remotion a moment to mount
+        setTimeout(() => {
+            hideLoader();
+        }, 100);
+    }, 700);
 });
 
 // Close Replay
