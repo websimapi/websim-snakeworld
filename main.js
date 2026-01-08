@@ -61,15 +61,15 @@ room.initialize().then(() => {
 const raycaster = new THREE.Raycaster();
 const mouse = new THREE.Vector2();
 
-function handleInput(x, y) {
-    // Convert screen coords to Normalized Device Coordinates (-1 to +1)
+function getIntersection(x, y) {
     mouse.x = (x / window.innerWidth) * 2 - 1;
     mouse.y = -(y / window.innerHeight) * 2 + 1;
-
     raycaster.setFromCamera(mouse, camera);
+    return raycaster.intersectObject(game.earth);
+}
 
-    // Raycast against the earth
-    const intersects = raycaster.intersectObject(game.earth);
+function handleInput(x, y) {
+    const intersects = getIntersection(x, y);
 
     if (intersects.length > 0) {
         // Pass the intersection point to the game logic
@@ -78,6 +78,16 @@ function handleInput(x, y) {
         // Remove start message on first tap
         const msg = document.getElementById('start-message');
         if(msg) msg.style.display = 'none';
+    }
+}
+
+// Ripple Logic
+let interactionStart = 0;
+
+function handleRippleTrigger(x, y, duration) {
+    const intersects = getIntersection(x, y);
+    if (intersects.length > 0) {
+        game.triggerRipple(intersects[0].point, duration);
     }
 }
 
@@ -90,16 +100,22 @@ window.addEventListener('resize', () => {
 
 // Touch events for mobile
 window.addEventListener('touchstart', (e) => {
+    interactionStart = Date.now();
     if (game.isGameOver) {
-        // Simple debounce for restart
-        if (Date.now() - game.time > 1000) { // arbitrary reuse of logic, better to just use DOM click
-            // Handled by click listener on game over modal
-        }
+        // Handled by click listener on game over modal
     } else {
         const touch = e.touches[0];
         handleInput(touch.clientX, touch.clientY);
     }
 }, { passive: false });
+
+window.addEventListener('touchend', (e) => {
+    if (!game.isGameOver && e.changedTouches.length > 0) {
+        const touch = e.changedTouches[0];
+        const duration = Date.now() - interactionStart;
+        handleRippleTrigger(touch.clientX, touch.clientY, duration);
+    }
+});
 
 window.addEventListener('touchmove', (e) => {
     // Allow dragging to update direction continuously
@@ -111,7 +127,14 @@ window.addEventListener('touchmove', (e) => {
 
 // Mouse events for desktop testing
 window.addEventListener('mousedown', (e) => {
+    interactionStart = Date.now();
     if(!game.isGameOver) handleInput(e.clientX, e.clientY);
+});
+window.addEventListener('mouseup', (e) => {
+    if(!game.isGameOver) {
+        const duration = Date.now() - interactionStart;
+        handleRippleTrigger(e.clientX, e.clientY, duration);
+    }
 });
 window.addEventListener('mousemove', (e) => {
     if(e.buttons === 1 && !game.isGameOver) handleInput(e.clientX, e.clientY);

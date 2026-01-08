@@ -4,6 +4,7 @@ import { FoodManager } from './food-manager.js';
 import { AudioManager } from './audio-manager.js';
 import { ReplayRecorder } from './replay-recorder.js';
 import { hideLoader } from './loader.js';
+import { getRippleHeight } from './math-utils.js';
 
 export class Game {
     constructor(scene, camera, renderer) {
@@ -20,6 +21,15 @@ export class Game {
         this.score = 0;
         this.growthPoints = 0;
         this.time = 0;
+
+        // Visuals
+        this.rippleUniforms = {
+            uTime: { value: 0 },
+            uRippleCenters: { value: new Array(5).fill().map(() => new THREE.Vector3()) },
+            uRippleStartTimes: { value: new Array(5).fill(-1000) },
+            uRippleIntensities: { value: new Array(5).fill(0) }
+        };
+        this.currentRippleIdx = 0;
         
         // Player Info
         this.playerInfo = { username: 'Player', avatarUrl: '' };
@@ -115,6 +125,76 @@ export class Game {
             metalness: 0.0,
             side: THREE.DoubleSide
         });
+
+        // Inject Ripple Shader Logic
+        material.onBeforeCompile = (shader) => {
+            shader.uniforms.uTime = this.rippleUniforms.uTime;
+            shader.uniforms.uRippleCenters = this.rippleUniforms.uRippleCenters;
+            shader.uniforms.uRippleStartTimes = this.rippleUniforms.uRippleStartTimes;
+            shader.uniforms.uRippleIntensities = this.rippleUniforms.uRippleIntensities;
+
+            shader.vertexShader = `varying vec3 vWorldPos;\n` + shader.vertexShader;
+            shader.vertexShader = shader.vertexShader.replace(
+                '#include <worldpos_vertex>',
+                `#include <worldpos_vertex>
+                vWorldPos = (modelMatrix * vec4(transformed, 1.0)).xyz;`
+            );
+
+            const rippleFunc = `
+                uniform float uTime;
+                uniform vec3 uRippleCenters[5];
+                uniform float uRippleStartTimes[5];
+                uniform float uRippleIntensities[5];
+                varying vec3 vWorldPos;
+
+                float getRipple(int i, vec3 pos) {
+                    float startTime = uRippleStartTimes[i];
+                    if (startTime < 0.0) return 0.0;
+                    
+                    float age = uTime - startTime;
+                    if (age < 0.0 || age > 2.0) return 0.0; // Lifetime 2s
+                    
+                    vec3 center = uRippleCenters[i];
+                    float intensity = uRippleIntensities[i];
+                    
+                    float dotProd = dot(normalize(pos), normalize(center));
+                    float angle = acos(clamp(dotProd, -1.0, 1.0));
+                    float dist = angle * 10.0; // approx distance on sphere radius 10
+                    
+                    float speed = 8.0; 
+                    float waveCenter = age * speed;
+                    float distDiff = dist - waveCenter;
+                    
+                    float ripple = 0.0;
+                    // Wave packet width
+                    if (abs(distDiff) < 2.0) {
+                        ripple = sin(distDiff * 3.0) * exp(-distDiff * distDiff);
+                    }
+                    
+                    // Fade out
+                    ripple *= (1.0 - age / 2.0);
+                    ripple *= intensity;
+                    return ripple;
+                }
+            `;
+
+            shader.fragmentShader = rippleFunc + shader.fragmentShader;
+            shader.fragmentShader = shader.fragmentShader.replace(
+                '#include <dithering_fragment>',
+                `#include <dithering_fragment>
+                float totalRipple = 0.0;
+                for(int i=0; i<5; i++) {
+                    totalRipple += getRipple(i, vWorldPos);
+                }
+                if (abs(totalRipple) > 0.01) {
+                    float strength = smoothstep(0.0, 0.5, abs(totalRipple));
+                    vec3 rippleColor = vec3(0.7, 0.9, 1.0);
+                    gl_FragColor.rgb = mix(gl_FragColor.rgb, rippleColor, strength * 0.4);
+                    gl_FragColor.rgb += rippleColor * strength * 0.2;
+                }`
+            );
+        };
+
         this.earth = new THREE.Mesh(geometry, material);
         this.scene.add(this.earth);
         
@@ -135,6 +215,9 @@ export class Game {
         this.foodManager.spawnFood(this.snake.head.position, this.snake.segments);
         
         this.recorder.reset();
+
+        // Reset Visuals
+        this.rippleUniforms.uRippleStartTimes.value.fill(-1000);
         
         // Reset Camera
         this.updateCamera(0.1, true); // Force snap
@@ -157,7 +240,7 @@ export class Game {
 
     playSound(name) {
         this.audioManager.play(name);
-        this.recorder.recordEvent(name);
+        this.recorder.recordEvent(name, null);
     }
 
     setTarget(point) {
@@ -166,21 +249,64 @@ export class Game {
         this.targetPoint = point.clone().normalize().multiplyScalar(this.EARTH_RADIUS);
     }
 
+    triggerRipple(point, durationMs) {
+        const idx = this.currentRippleIdx;
+        this.rippleUniforms.uRippleCenters.value[idx].copy(point);
+        this.rippleUniforms.uRippleStartTimes.value[idx] = this.time;
+        
+        // Intensity logic based on hold duration
+        // Short tap (<200ms) -> 0.15
+        // Long tap (>600ms) -> 0.45
+        let intensity = 0.15;
+        if (durationMs > 200) {
+            const factor = Math.min((durationMs - 200) / 400, 1.0);
+            intensity = 0.15 + factor * 0.3;
+        }
+        
+        this.rippleUniforms.uRippleIntensities.value[idx] = intensity;
+        
+        this.currentRippleIdx = (this.currentRippleIdx + 1) % 5;
+
+        // Record for replay
+        this.recorder.recordEvent('ripple', { 
+            center: point.toArray(), 
+            duration: durationMs 
+        });
+    }
+
     update(dt) {
+        this.time += dt;
+        this.rippleUniforms.uTime.value = this.time;
+
         if(this.isGameOver) return;
+
+        // Prepare ripple function for entities to use
+        const rippleFn = (pos) => {
+            return getRippleHeight(
+                pos,
+                this.time,
+                this.rippleUniforms.uRippleCenters.value,
+                this.rippleUniforms.uRippleStartTimes.value,
+                this.rippleUniforms.uRippleIntensities.value,
+                this.EARTH_RADIUS
+            );
+        };
 
         // 1. Update Snake
         // removed movement logic block - delegated to Snake.update
-        const moveDist = this.snake.update(dt, this.targetPoint);
+        const moveDist = this.snake.update(dt, this.targetPoint, rippleFn);
         if (moveDist > 0 && this.targetPoint && this.snake.head.position.distanceTo(this.targetPoint) < 1.0) {
             this.targetPoint = null;
         }
 
         // 2. Update Food Manager (Pulse anims, Bonus spawning)
         // removed bonus spawn logic - delegated to FoodManager
-        this.foodManager.update(moveDist, this.snake.getTailPosition());
+        this.foodManager.update(moveDist, this.snake.getTailPosition(), rippleFn);
 
         // 3. Collision Checks
+        // We need to pass the "logic" position (surface level) or handle it inside
+        // Since snake.head.position is now visually displaced, we should normalize for collision checks
+        // or checkCollision can handle it.
         const collisions = this.foodManager.checkCollisions(this.snake.head.position);
         
         if (collisions.mainFood) {
@@ -266,6 +392,10 @@ export class Game {
                 color: seg.material.color.getHex()
             })),
             score: this.score,
+            tongue: {
+                scaleX: this.snake.tongue ? this.snake.tongue.scale.x : 1,
+                scaleZ: this.snake.tongue ? this.snake.tongue.scale.z : 0.01
+            },
             events: [] // Filled by recorder
         };
     }
