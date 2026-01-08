@@ -116,7 +116,14 @@ export class Game {
 
         // Initialize Food
         const foodGeo = new THREE.SphereGeometry(0.5, 16, 16);
-        const foodMat = new THREE.MeshStandardMaterial({ color: 0xffaa00, emissive: 0xff0000, emissiveIntensity: 0.5 });
+        const foodMat = new THREE.MeshStandardMaterial({ 
+            color: 0xffaa00, 
+            emissive: 0xff0000, 
+            emissiveIntensity: 0.5,
+            transparent: true,
+            opacity: 1.0,
+            wireframe: false
+        });
         this.food = new THREE.Mesh(foodGeo, foodMat);
         this.scene.add(this.food);
         this.spawnFood();
@@ -340,8 +347,35 @@ export class Game {
             }
         }
         
-        // 7. Pulse Food
+        // 7. Pulse Food & Check Occlusion
         this.food.scale.setScalar(1 + Math.sin(Date.now() * 0.01) * 0.2);
+
+        // Calculate occlusion to change style when on far side
+        const camDir = this.camera.position.clone().normalize();
+        const foodDir = this.food.position.clone().normalize();
+        const dot = camDir.dot(foodDir);
+        // Horizon limit is cos(theta) where sin(theta) = R/D. cos = sqrt(1-(R/D)^2)? 
+        // Or simply: Tangent point satisfies cos(theta) = R/Dist ? No, R/Dist is sin(alpha) where alpha is angle subtended by radius.
+        // Actually, horizon is at angle A from center where cos(A) = R/Dist.
+        const horizonCos = this.EARTH_RADIUS / this.camera.position.length();
+
+        if (dot < horizonCos - 0.1) {
+            // Occluded - Ghostly Wireframe
+            if (!this.food.material.wireframe) {
+                this.food.material.wireframe = true;
+                this.food.material.color.setHex(0xaaaaaa);
+                this.food.material.emissive.setHex(0x000000);
+                this.food.material.opacity = 0.5;
+            }
+        } else {
+            // Visible - Solid
+            if (this.food.material.wireframe) {
+                this.food.material.wireframe = false;
+                this.food.material.color.setHex(0xffaa00);
+                this.food.material.emissive.setHex(0xff0000);
+                this.food.material.opacity = 1.0;
+            }
+        }
 
         // 7.5 Update Camera (Moved from main.js for consistency)
         const idealCameraPos = this.head.position.clone().normalize().multiplyScalar(30);

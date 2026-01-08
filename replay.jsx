@@ -16,10 +16,12 @@ const ReplayScene = ({ data }) => {
         frame.events.forEach((soundName, i) => {
           const url = data.config.sounds && data.config.sounds[soundName];
           if (url) {
+            const duration = soundName === "die" ? 90 : 30;
             cues.push({
               id: `sfx-${idx}-${i}-${soundName}`,
               frame: idx,
-              src: url
+              src: url,
+              duration
             });
           }
         });
@@ -153,7 +155,7 @@ const ReplayScene = ({ data }) => {
   return /* @__PURE__ */ jsxDEV(AbsoluteFill, { children: [
     /* @__PURE__ */ jsxDEV("div", { ref: containerRef, style: { width: "100%", height: "100%" } }, void 0, false, {
       fileName: "<stdin>",
-      lineNumber: 210,
+      lineNumber: 214,
       columnNumber: 13
     }),
     /* @__PURE__ */ jsxDEV("div", { style: {
@@ -190,7 +192,7 @@ const ReplayScene = ({ data }) => {
           false,
           {
             fileName: "<stdin>",
-            lineNumber: 229,
+            lineNumber: 233,
             columnNumber: 21
           }
         ),
@@ -208,12 +210,12 @@ const ReplayScene = ({ data }) => {
           whiteSpace: "nowrap"
         }, children: playerInfo.username }, void 0, false, {
           fileName: "<stdin>",
-          lineNumber: 241,
+          lineNumber: 245,
           columnNumber: 21
         })
       ] }, void 0, true, {
         fileName: "<stdin>",
-        lineNumber: 223,
+        lineNumber: 227,
         columnNumber: 17
       }),
       /* @__PURE__ */ jsxDEV("div", { style: {
@@ -225,26 +227,26 @@ const ReplayScene = ({ data }) => {
         marginTop: "10px"
       }, children: score }, void 0, false, {
         fileName: "<stdin>",
-        lineNumber: 257,
+        lineNumber: 261,
         columnNumber: 17
       })
     ] }, void 0, true, {
       fileName: "<stdin>",
-      lineNumber: 213,
+      lineNumber: 217,
       columnNumber: 13
     }),
-    audioCues.map((cue) => /* @__PURE__ */ jsxDEV(Sequence, { from: cue.frame, children: /* @__PURE__ */ jsxDEV(Audio, { src: cue.src }, void 0, false, {
+    audioCues.map((cue) => /* @__PURE__ */ jsxDEV(Sequence, { from: cue.frame, durationInFrames: cue.duration, children: /* @__PURE__ */ jsxDEV(Audio, { src: cue.src }, void 0, false, {
       fileName: "<stdin>",
-      lineNumber: 271,
+      lineNumber: 275,
       columnNumber: 21
     }) }, cue.id, false, {
       fileName: "<stdin>",
-      lineNumber: 270,
+      lineNumber: 274,
       columnNumber: 17
     }))
   ] }, void 0, true, {
     fileName: "<stdin>",
-    lineNumber: 209,
+    lineNumber: 213,
     columnNumber: 9
   });
 };
@@ -271,18 +273,19 @@ const mountReplay = (containerId, replayData) => {
         style: { width: "100%", height: "100%" },
         controls: true,
         loop: true,
-        autoPlay: true
+        autoPlay: true,
+        numberOfSharedAudioTags: 20
       },
       void 0,
       false,
       {
         fileName: "<stdin>",
-        lineNumber: 298,
+        lineNumber: 302,
         columnNumber: 13
       }
     ) }, void 0, false, {
       fileName: "<stdin>",
-      lineNumber: 297,
+      lineNumber: 301,
       columnNumber: 9
     })
   );
