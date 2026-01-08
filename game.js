@@ -147,7 +147,12 @@ export class Game {
 
         const scoreEl = document.getElementById('player-score');
         if(scoreEl) scoreEl.innerText = this.score;
-        document.getElementById('game-over').classList.add('hidden');
+        
+        const gameOverEl = document.getElementById('game-over');
+        if (gameOverEl) {
+            gameOverEl.classList.add('hidden');
+            gameOverEl.classList.remove('visible');
+        }
     }
 
     playSound(name) {
@@ -284,7 +289,27 @@ export class Game {
         // Force a final record
         this.recorder.update(100, () => this.getSnapshot()); 
         
-        document.getElementById('game-over').classList.remove('hidden');
+        const gameOverEl = document.getElementById('game-over');
+        const restartBtn = document.getElementById('btn-restart');
+        const replayBtn = document.getElementById('btn-replay');
+
+        // Disable buttons initially to prevent misclicks
+        if (restartBtn) restartBtn.disabled = true;
+        if (replayBtn) replayBtn.disabled = true;
+
+        if (gameOverEl) {
+            gameOverEl.classList.remove('hidden');
+            // Allow display: none to clear before starting transition
+            requestAnimationFrame(() => {
+                gameOverEl.classList.add('visible');
+            });
+
+            // Re-enable buttons shortly after fade-in starts
+            setTimeout(() => {
+                if (restartBtn) restartBtn.disabled = false;
+                if (replayBtn) replayBtn.disabled = false;
+            }, 700);
+        }
         this.isPlaying = false;
     }
 }

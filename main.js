@@ -161,8 +161,10 @@ document.getElementById('close-replay').addEventListener('click', async () => {
     document.getElementById('ui-layer').classList.remove('hidden');
     document.getElementById('game-container').classList.remove('hidden');
     
-    // Ensure Game Over screen is still visible
-    document.getElementById('game-over').classList.remove('hidden');
+    // Ensure Game Over screen is still visible and interactable
+    const gameOverEl = document.getElementById('game-over');
+    gameOverEl.classList.remove('hidden');
+    gameOverEl.classList.add('visible');
 });
 
 // Animation Loop
