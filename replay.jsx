@@ -298,6 +298,8 @@ const ReplayScene = ({ data }) => {
   });
 };
 let replayRoot = null;
+let playerRef = null;
+let currentDuration = 0;
 const mountReplay = (containerId, replayData) => {
   const container = document.getElementById(containerId);
   if (!container) return;
@@ -306,11 +308,14 @@ const mountReplay = (containerId, replayData) => {
   }
   replayRoot = createRoot(container);
   const duration = replayData.frames.length;
+  currentDuration = duration;
   const fps = replayData.config.fps || 30;
+  playerRef = { current: null };
   replayRoot.render(
     /* @__PURE__ */ jsxDEV("div", { style: { width: "100%", height: "100%", background: "#000" }, children: /* @__PURE__ */ jsxDEV(
       Player,
       {
+        ref: playerRef,
         component: ReplayScene,
         inputProps: { data: replayData },
         durationInFrames: duration,
@@ -327,12 +332,12 @@ const mountReplay = (containerId, replayData) => {
       false,
       {
         fileName: "<stdin>",
-        lineNumber: 363,
+        lineNumber: 369,
         columnNumber: 13
       }
     ) }, void 0, false, {
       fileName: "<stdin>",
-      lineNumber: 362,
+      lineNumber: 368,
       columnNumber: 9
     })
   );
@@ -341,10 +346,62 @@ const unmountReplay = () => {
   if (replayRoot) {
     replayRoot.unmount();
     replayRoot = null;
+    playerRef = null;
   }
+};
+const downloadRecording = async () => {
+  if (!playerRef || !playerRef.current) {
+    throw new Error("Player not initialized");
+  }
+  const canvas = document.querySelector("#replay-root canvas");
+  if (!canvas) {
+    throw new Error("Canvas not found");
+  }
+  playerRef.current.pause();
+  playerRef.current.seekTo(0);
+  await new Promise((r) => setTimeout(r, 500));
+  const stream = canvas.captureStream(30);
+  const recorder = new MediaRecorder(stream, {
+    mimeType: MediaRecorder.isTypeSupported("video/webm; codecs=vp9") ? "video/webm; codecs=vp9" : "video/webm"
+  });
+  const chunks = [];
+  recorder.ondataavailable = (e) => {
+    if (e.data.size > 0) chunks.push(e.data);
+  };
+  const recordingPromise = new Promise((resolve) => {
+    recorder.onstop = () => {
+      const blob = new Blob(chunks, { type: "video/webm" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `snake-replay-${Date.now()}.webm`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      resolve();
+    };
+  });
+  recorder.start();
+  playerRef.current.play();
+  const pollInterval = setInterval(() => {
+    if (!playerRef.current) {
+      clearInterval(pollInterval);
+      recorder.stop();
+      return;
+    }
+    const frame = playerRef.current.getCurrentFrame();
+    if (frame >= currentDuration - 1) {
+      clearInterval(pollInterval);
+      recorder.stop();
+      playerRef.current.pause();
+    }
+  }, 100);
+  return recordingPromise;
 };
 export {
   ReplayScene,
+  downloadRecording,
   mountReplay,
   unmountReplay
 };
