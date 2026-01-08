@@ -19,7 +19,8 @@ const ReplayScene = ({ data }) => {
             cues.push({
               id: `sfx-${idx}-${i}-${soundName}`,
               frame: idx,
-              src: url
+              src: url,
+              name: soundName
             });
           }
         });
@@ -27,6 +28,10 @@ const ReplayScene = ({ data }) => {
     });
     return cues;
   }, [data]);
+  const activeCues = audioCues.filter((cue) => {
+    const duration = cue.name === "die" ? 150 : 30;
+    return frameIndex >= cue.frame && frameIndex < cue.frame + duration;
+  });
   const sceneRef = useRef(null);
   const cameraRef = useRef(null);
   const rendererRef = useRef(null);
@@ -165,7 +170,7 @@ const ReplayScene = ({ data }) => {
   return /* @__PURE__ */ jsxDEV(AbsoluteFill, { children: [
     /* @__PURE__ */ jsxDEV("div", { ref: containerRef, style: { width: "100%", height: "100%" } }, void 0, false, {
       fileName: "<stdin>",
-      lineNumber: 229,
+      lineNumber: 237,
       columnNumber: 13
     }),
     /* @__PURE__ */ jsxDEV("div", { style: {
@@ -202,7 +207,7 @@ const ReplayScene = ({ data }) => {
           false,
           {
             fileName: "<stdin>",
-            lineNumber: 248,
+            lineNumber: 256,
             columnNumber: 21
           }
         ),
@@ -220,12 +225,12 @@ const ReplayScene = ({ data }) => {
           whiteSpace: "nowrap"
         }, children: playerInfo.username }, void 0, false, {
           fileName: "<stdin>",
-          lineNumber: 260,
+          lineNumber: 268,
           columnNumber: 21
         })
       ] }, void 0, true, {
         fileName: "<stdin>",
-        lineNumber: 242,
+        lineNumber: 250,
         columnNumber: 17
       }),
       /* @__PURE__ */ jsxDEV("div", { style: {
@@ -237,26 +242,29 @@ const ReplayScene = ({ data }) => {
         marginTop: "10px"
       }, children: score }, void 0, false, {
         fileName: "<stdin>",
-        lineNumber: 276,
+        lineNumber: 284,
         columnNumber: 17
       })
     ] }, void 0, true, {
       fileName: "<stdin>",
-      lineNumber: 232,
+      lineNumber: 240,
       columnNumber: 13
     }),
-    audioCues.map((cue) => /* @__PURE__ */ jsxDEV(Sequence, { from: cue.frame, durationInFrames: 90, children: /* @__PURE__ */ jsxDEV(Audio, { src: cue.src }, void 0, false, {
-      fileName: "<stdin>",
-      lineNumber: 290,
-      columnNumber: 21
-    }) }, cue.id, false, {
-      fileName: "<stdin>",
-      lineNumber: 289,
-      columnNumber: 17
-    }))
+    activeCues.map((cue) => {
+      const duration = cue.name === "die" ? 150 : 30;
+      return /* @__PURE__ */ jsxDEV(Sequence, { from: cue.frame, durationInFrames: duration, children: /* @__PURE__ */ jsxDEV(Audio, { src: cue.src }, void 0, false, {
+        fileName: "<stdin>",
+        lineNumber: 300,
+        columnNumber: 25
+      }) }, cue.id, false, {
+        fileName: "<stdin>",
+        lineNumber: 299,
+        columnNumber: 21
+      });
+    })
   ] }, void 0, true, {
     fileName: "<stdin>",
-    lineNumber: 228,
+    lineNumber: 236,
     columnNumber: 9
   });
 };
@@ -290,12 +298,12 @@ const mountReplay = (containerId, replayData) => {
       false,
       {
         fileName: "<stdin>",
-        lineNumber: 317,
+        lineNumber: 328,
         columnNumber: 13
       }
     ) }, void 0, false, {
       fileName: "<stdin>",
-      lineNumber: 316,
+      lineNumber: 327,
       columnNumber: 9
     })
   );
