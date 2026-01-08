@@ -66,11 +66,12 @@ export class Game {
         // Create Earth
         const geometry = new THREE.SphereGeometry(this.EARTH_RADIUS, 64, 64);
         const material = new THREE.MeshStandardMaterial({
-            color: 0xffffff,
+            color: 0xaaddff, // Slight blue icy tint
             transparent: true,
-            opacity: 0.3,
-            roughness: 0.1,
-            metalness: 0.1
+            opacity: 0.6, // Less transparent as requested
+            roughness: 0.2, // Smooth for moon reflections
+            metalness: 0.3, // Slight metallic shine
+            side: THREE.DoubleSide // Gives volume to the transparent sphere
         });
         this.earth = new THREE.Mesh(geometry, material);
         this.scene.add(this.earth);
@@ -309,6 +310,31 @@ export class Game {
         
         // 7. Pulse Food
         this.food.scale.setScalar(1 + Math.sin(Date.now() * 0.01) * 0.2);
+
+        // Check visibility of food relative to camera
+        if (this.camera && this.food) {
+            const toCam = new THREE.Vector3().subVectors(this.camera.position, this.food.position);
+            const foodNormal = this.food.position.clone().normalize();
+            
+            // If dot product is negative, the surface normal points away from camera (Back side of sphere)
+            const isBehind = foodNormal.dot(toCam) < 0;
+
+            if (isBehind) {
+                // Ghost Mode (Outline) for occluded food
+                this.food.material.color.setHex(0x888888);
+                this.food.material.emissive.setHex(0x000000);
+                this.food.material.transparent = true;
+                this.food.material.opacity = 0.5;
+                this.food.material.wireframe = true;
+            } else {
+                // Normal Mode
+                this.food.material.color.setHex(0xffaa00);
+                this.food.material.emissive.setHex(0xff0000);
+                this.food.material.transparent = false;
+                this.food.material.opacity = 1.0;
+                this.food.material.wireframe = false;
+            }
+        }
     }
 
     gameOver() {

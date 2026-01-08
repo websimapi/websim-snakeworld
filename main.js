@@ -21,12 +21,19 @@ renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); // Optimize for mo
 document.getElementById('game-container').appendChild(renderer.domElement);
 
 // Lighting
-const ambientLight = new THREE.AmbientLight(0x404040, 2); // Soft white light
+// Deep space ambient fill
+const ambientLight = new THREE.AmbientLight(0x050515, 1.0); 
 scene.add(ambientLight);
 
-const dirLight = new THREE.DirectionalLight(0xffffff, 2);
-dirLight.position.set(50, 50, 50);
-scene.add(dirLight);
+// "Moon" Light - Strong, cool directional light
+const moonLight = new THREE.DirectionalLight(0xddeeff, 2.5);
+moonLight.position.set(20, 30, 20);
+scene.add(moonLight);
+
+// Rim Light - Subtle backlight to separate sphere from dark background
+const rimLight = new THREE.DirectionalLight(0x334455, 1.5);
+rimLight.position.set(-20, -10, -30);
+scene.add(rimLight);
 
 // Initialize Game
 const game = new Game(scene, camera, renderer);
