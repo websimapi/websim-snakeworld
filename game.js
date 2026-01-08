@@ -477,11 +477,9 @@ export class Game {
         if (frames.length > 0) {
             const lastFrame = frames[frames.length - 1];
             // Create a static frame copy with no events
-            // We strip events to prevent the death sound from looping
-            const paddingFrame = {
-                ...lastFrame,
-                events: []
-            };
+            // We use JSON parse/stringify to ensure a deep clone so no references are shared
+            const paddingFrame = JSON.parse(JSON.stringify(lastFrame));
+            paddingFrame.events = []; // Strip events
             
             const paddingFramesCount = 5 * this.RECORD_FPS; // 5 seconds padding
             for (let i = 0; i < paddingFramesCount; i++) {

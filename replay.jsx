@@ -1,7 +1,7 @@
 import { jsxDEV } from "react/jsx-dev-runtime";
 import React, { useEffect, useLayoutEffect, useRef, useState, useMemo } from "react";
 import { createRoot } from "react-dom/client";
-import { Player } from "@websim/remotion/player";
+import { Player } from "@remotion/player";
 import { AbsoluteFill, useCurrentFrame, useVideoConfig, Audio, Sequence } from "remotion";
 import * as THREE from "three";
 const ReplayScene = ({ data }) => {
@@ -195,10 +195,11 @@ const ReplayScene = ({ data }) => {
   const currentFrameData = data.frames[Math.min(Math.floor(frameIndex), data.frames.length - 1)] || {};
   const score = currentFrameData.score || 0;
   const playerInfo = data.config.playerInfo || { username: "Player", avatarUrl: "https://via.placeholder.com/64" };
+  if (!data) return null;
   return /* @__PURE__ */ jsxDEV(AbsoluteFill, { children: [
     /* @__PURE__ */ jsxDEV("div", { ref: containerRef, style: { width: "100%", height: "100%" } }, void 0, false, {
       fileName: "<stdin>",
-      lineNumber: 270,
+      lineNumber: 272,
       columnNumber: 13
     }),
     /* @__PURE__ */ jsxDEV("div", { style: {
@@ -235,7 +236,7 @@ const ReplayScene = ({ data }) => {
           false,
           {
             fileName: "<stdin>",
-            lineNumber: 289,
+            lineNumber: 291,
             columnNumber: 21
           }
         ),
@@ -253,12 +254,12 @@ const ReplayScene = ({ data }) => {
           whiteSpace: "nowrap"
         }, children: playerInfo.username }, void 0, false, {
           fileName: "<stdin>",
-          lineNumber: 301,
+          lineNumber: 303,
           columnNumber: 21
         })
       ] }, void 0, true, {
         fileName: "<stdin>",
-        lineNumber: 283,
+        lineNumber: 285,
         columnNumber: 17
       }),
       /* @__PURE__ */ jsxDEV("div", { style: {
@@ -270,29 +271,29 @@ const ReplayScene = ({ data }) => {
         marginTop: "10px"
       }, children: score }, void 0, false, {
         fileName: "<stdin>",
-        lineNumber: 317,
+        lineNumber: 319,
         columnNumber: 17
       })
     ] }, void 0, true, {
       fileName: "<stdin>",
-      lineNumber: 273,
+      lineNumber: 275,
       columnNumber: 13
     }),
     activeCues.map((cue) => {
       const duration = cue.name === "die" ? 150 : 30;
       return /* @__PURE__ */ jsxDEV(Sequence, { from: cue.frame, durationInFrames: duration, children: /* @__PURE__ */ jsxDEV(Audio, { src: cue.src }, void 0, false, {
         fileName: "<stdin>",
-        lineNumber: 333,
+        lineNumber: 335,
         columnNumber: 25
       }) }, cue.id, false, {
         fileName: "<stdin>",
-        lineNumber: 332,
+        lineNumber: 334,
         columnNumber: 21
       });
     })
   ] }, void 0, true, {
     fileName: "<stdin>",
-    lineNumber: 269,
+    lineNumber: 271,
     columnNumber: 9
   });
 };
@@ -326,12 +327,12 @@ const mountReplay = (containerId, replayData) => {
       false,
       {
         fileName: "<stdin>",
-        lineNumber: 361,
+        lineNumber: 363,
         columnNumber: 13
       }
     ) }, void 0, false, {
       fileName: "<stdin>",
-      lineNumber: 360,
+      lineNumber: 362,
       columnNumber: 9
     })
   );
@@ -343,6 +344,7 @@ const unmountReplay = () => {
   }
 };
 export {
+  ReplayScene,
   mountReplay,
   unmountReplay
 };
