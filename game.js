@@ -313,13 +313,16 @@ export class Game {
 
         // Check visibility of food relative to camera
         if (this.camera && this.food) {
-            const toCam = new THREE.Vector3().subVectors(this.camera.position, this.food.position);
+            const toCam = new THREE.Vector3().subVectors(this.camera.position, this.food.position).normalize();
             const foodNormal = this.food.position.clone().normalize();
             
-            // If dot product is negative, the surface normal points away from camera (Back side of sphere)
-            const isBehind = foodNormal.dot(toCam) < 0;
+            // Check orientation relative to camera using dot product.
+            // A threshold of -0.2 (instead of 0) allows the food to switch to "Visible" mode
+            // slightly before its center clears the horizon, ensuring that if any part
+            // of the food is sticking out, it renders as solid.
+            const isVisible = foodNormal.dot(toCam) > -0.2;
 
-            if (isBehind) {
+            if (!isVisible) {
                 // Ghost Mode (Outline) for occluded food
                 this.food.material.color.setHex(0x888888);
                 this.food.material.emissive.setHex(0x000000);
