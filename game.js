@@ -496,8 +496,8 @@ export class Game {
                 fps: this.RECORD_FPS,
                 playerInfo: this.playerInfo,
                 sounds: {
-                    eat: './snake_eat.mp3',
-                    die: './game_over.mp3'
+                    eat: new URL('snake_eat.mp3', window.location.href).href,
+                    die: new URL('game_over.mp3', window.location.href).href
                 }
             }
         };
