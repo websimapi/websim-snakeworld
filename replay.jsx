@@ -39,6 +39,8 @@ const ReplayScene = ({ data }) => {
     earth: null,
     head: null,
     food: null,
+    bonusFoods: [],
+    // Array of meshes
     segments: [],
     cameraRig: null
   });
@@ -98,6 +100,7 @@ const ReplayScene = ({ data }) => {
       earth,
       head,
       food,
+      bonusFoods: [],
       segments: [],
       cameraRig
     };
@@ -122,6 +125,31 @@ const ReplayScene = ({ data }) => {
     objs.head.position.fromArray(frameData.head.pos);
     objs.head.quaternion.fromArray(frameData.head.quat);
     objs.food.position.fromArray(frameData.food);
+    const bonusData = frameData.bonusFoods || [];
+    while (objs.bonusFoods.length < bonusData.length) {
+      const bGeo = new THREE.SphereGeometry(0.25, 8, 8);
+      const bMat = new THREE.MeshStandardMaterial({
+        color: 16776960,
+        emissive: 16755200,
+        emissiveIntensity: 0.5
+      });
+      const mesh = new THREE.Mesh(bGeo, bMat);
+      sceneRef.current.add(mesh);
+      objs.bonusFoods.push(mesh);
+    }
+    while (objs.bonusFoods.length > bonusData.length) {
+      const mesh = objs.bonusFoods.pop();
+      if (mesh) {
+        sceneRef.current.remove(mesh);
+        if (mesh.geometry) mesh.geometry.dispose();
+        if (mesh.material) mesh.material.dispose();
+      }
+    }
+    bonusData.forEach((pos, i) => {
+      if (objs.bonusFoods[i]) {
+        objs.bonusFoods[i].position.fromArray(pos);
+      }
+    });
     while (objs.segments.length < frameData.segments.length) {
       const segGeo = new THREE.BoxGeometry(0.6, 0.3, 0.6);
       const colorHex = frameData.segments[objs.segments.length].color;
@@ -170,7 +198,7 @@ const ReplayScene = ({ data }) => {
   return /* @__PURE__ */ jsxDEV(AbsoluteFill, { children: [
     /* @__PURE__ */ jsxDEV("div", { ref: containerRef, style: { width: "100%", height: "100%" } }, void 0, false, {
       fileName: "<stdin>",
-      lineNumber: 237,
+      lineNumber: 270,
       columnNumber: 13
     }),
     /* @__PURE__ */ jsxDEV("div", { style: {
@@ -207,7 +235,7 @@ const ReplayScene = ({ data }) => {
           false,
           {
             fileName: "<stdin>",
-            lineNumber: 256,
+            lineNumber: 289,
             columnNumber: 21
           }
         ),
@@ -225,12 +253,12 @@ const ReplayScene = ({ data }) => {
           whiteSpace: "nowrap"
         }, children: playerInfo.username }, void 0, false, {
           fileName: "<stdin>",
-          lineNumber: 268,
+          lineNumber: 301,
           columnNumber: 21
         })
       ] }, void 0, true, {
         fileName: "<stdin>",
-        lineNumber: 250,
+        lineNumber: 283,
         columnNumber: 17
       }),
       /* @__PURE__ */ jsxDEV("div", { style: {
@@ -242,29 +270,29 @@ const ReplayScene = ({ data }) => {
         marginTop: "10px"
       }, children: score }, void 0, false, {
         fileName: "<stdin>",
-        lineNumber: 284,
+        lineNumber: 317,
         columnNumber: 17
       })
     ] }, void 0, true, {
       fileName: "<stdin>",
-      lineNumber: 240,
+      lineNumber: 273,
       columnNumber: 13
     }),
     activeCues.map((cue) => {
       const duration = cue.name === "die" ? 150 : 30;
       return /* @__PURE__ */ jsxDEV(Sequence, { from: cue.frame, durationInFrames: duration, children: /* @__PURE__ */ jsxDEV(Audio, { src: cue.src }, void 0, false, {
         fileName: "<stdin>",
-        lineNumber: 300,
+        lineNumber: 333,
         columnNumber: 25
       }) }, cue.id, false, {
         fileName: "<stdin>",
-        lineNumber: 299,
+        lineNumber: 332,
         columnNumber: 21
       });
     })
   ] }, void 0, true, {
     fileName: "<stdin>",
-    lineNumber: 236,
+    lineNumber: 269,
     columnNumber: 9
   });
 };
@@ -298,12 +326,12 @@ const mountReplay = (containerId, replayData) => {
       false,
       {
         fileName: "<stdin>",
-        lineNumber: 328,
+        lineNumber: 361,
         columnNumber: 13
       }
     ) }, void 0, false, {
       fileName: "<stdin>",
-      lineNumber: 327,
+      lineNumber: 360,
       columnNumber: 9
     })
   );

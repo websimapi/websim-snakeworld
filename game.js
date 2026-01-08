@@ -18,6 +18,7 @@ export class Game {
         this.isPlaying = false;
         this.isGameOver = false;
         this.score = 0;
+        this.growthPoints = 0; // Tracks points for next growth
         this.time = 0;
         
         // Entities
@@ -26,6 +27,7 @@ export class Game {
         this.segments = []; // Array of mesh objects
         this.pathHistory = []; // { pos: Vector3, quat: Quaternion }
         this.food = null;
+        this.bonusFoods = []; // Array of meshes for yellow food
         
         // Player Info
         this.playerInfo = { username: 'Player', avatarUrl: '' };
@@ -128,6 +130,10 @@ export class Game {
         // Clear segments
         this.segments.forEach(seg => this.scene.remove(seg));
         this.segments = [];
+        // Clear bonus foods
+        this.bonusFoods.forEach(f => this.scene.remove(f));
+        this.bonusFoods = [];
+        
         this.pathHistory = [];
         this.replayData = []; // Clear previous recording
         this.recordAccumulator = 0;
@@ -149,6 +155,7 @@ export class Game {
         this.camera.up.copy(snakeForward);
         
         this.score = 0;
+        this.growthPoints = 0;
         this.isGameOver = false;
         this.isPlaying = true;
 
@@ -158,7 +165,7 @@ export class Game {
         
         // Rebuild initial body
         for(let i=0; i<this.STARTING_SEGMENTS; i++) {
-            this.addSegment();
+            this.addSegmentInternal();
         }
         
         // Pre-fill history so segments appear behind head
@@ -171,7 +178,7 @@ export class Game {
         }
     }
 
-    addSegment() {
+    addSegmentInternal() {
         const segGeo = new THREE.BoxGeometry(0.6, 0.3, 0.6);
         // Gradient color for body
         const color = new THREE.Color().setHSL(0.3 + (this.segments.length * 0.02) % 0.5, 1.0, 0.5);
@@ -207,6 +214,54 @@ export class Game {
         this.food.position.copy(pos);
         // Align food to surface normal
         this.food.lookAt(new THREE.Vector3(0,0,0));
+    }
+
+    spawnBonusTrail() {
+        const tail = this.segments.length > 0 ? this.segments[this.segments.length - 1] : this.head;
+        const startPos = tail.position.clone();
+        
+        // Determine backward direction (roughly opposite to tail's forward)
+        // Snake moves along local Z usually, but let's use the vector from 2nd to last segment to last segment
+        let backwardDir;
+        if (this.segments.length >= 2) {
+            const prev = this.segments[this.segments.length - 2];
+            backwardDir = new THREE.Vector3().subVectors(tail.position, prev.position).normalize();
+        } else {
+            // Fallback: use tail's orientation, assuming -Z is backward (standard for LookAt)
+            // But our snake geometry might be rotated differently. 
+            // In update, we use (0,0,1) as forward. So (0,0,-1) is backward.
+            backwardDir = new THREE.Vector3(0, 0, -1).applyQuaternion(tail.quaternion);
+        }
+
+        // Project onto tangent plane to stay on sphere
+        const normal = startPos.clone().normalize();
+        backwardDir.projectOnPlane(normal).normalize();
+
+        for(let i = 1; i <= 5; i++) {
+            // Calculate position: startPos + backwardDir * distance * i
+            // But we need to wrap it around the sphere (Great Circle)
+            // Arc length = r * theta -> theta = arc / r
+            const dist = i * 1.5; // Spacing
+            const angle = dist / this.EARTH_RADIUS;
+            
+            // Rotate startPos around axis (normal x backwardDir) by angle
+            const axis = new THREE.Vector3().crossVectors(normal, backwardDir).normalize();
+            const q = new THREE.Quaternion().setFromAxisAngle(axis, angle);
+            
+            const pos = startPos.clone().applyQuaternion(q);
+
+            // Create mesh
+            const geo = new THREE.SphereGeometry(0.25, 8, 8);
+            const mat = new THREE.MeshStandardMaterial({ 
+                color: 0xffff00, 
+                emissive: 0xffaa00,
+                emissiveIntensity: 0.5 
+            });
+            const mesh = new THREE.Mesh(geo, mat);
+            mesh.position.copy(pos);
+            this.scene.add(mesh);
+            this.bonusFoods.push(mesh);
+        }
     }
 
     setTarget(point) {
@@ -322,13 +377,44 @@ export class Game {
         }
 
         // 5. Collision Check: Food
+        // Orange Food
         if (this.head.position.distanceTo(this.food.position) < 1.5) {
             this.playSound('eat');
-            this.score += 10;
+            this.score += 5;
+            this.growthPoints += 5;
+            
             const scoreEl = document.getElementById('player-score');
             if(scoreEl) scoreEl.innerText = this.score;
-            this.addSegment();
+            
             this.spawnFood();
+            
+            // 50% chance for bonus trail
+            if (Math.random() < 0.5) {
+                this.spawnBonusTrail();
+            }
+        }
+
+        // Yellow Bonus Foods
+        for (let i = this.bonusFoods.length - 1; i >= 0; i--) {
+            const bonus = this.bonusFoods[i];
+            if (this.head.position.distanceTo(bonus.position) < 1.2) {
+                this.playSound('eat');
+                this.score += 1;
+                this.growthPoints += 1;
+                
+                const scoreEl = document.getElementById('player-score');
+                if(scoreEl) scoreEl.innerText = this.score;
+
+                // Remove
+                this.scene.remove(bonus);
+                this.bonusFoods.splice(i, 1);
+            }
+        }
+
+        // Check Growth
+        while (this.growthPoints >= 10) {
+            this.addSegmentInternal();
+            this.growthPoints -= 10;
         }
 
         // 6. Collision Check: Self
@@ -373,6 +459,7 @@ export class Game {
                 up: this.camera.up.toArray()
             },
             food: this.food.position.toArray(),
+            bonusFoods: this.bonusFoods.map(b => b.position.toArray()),
             segments: this.segments.map(seg => ({
                 pos: seg.position.toArray(),
                 quat: seg.quaternion.toArray(),
