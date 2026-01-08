@@ -95,11 +95,52 @@ window.addEventListener('mousemove', (e) => {
     if(e.buttons === 1 && !game.isGameOver) handleInput(e.clientX, e.clientY);
 });
 
-// Restart handler
-document.getElementById('game-over').addEventListener('click', () => {
+// UI Event Handlers
+const gameOverScreen = document.getElementById('game-over');
+const replayContainer = document.getElementById('replay-container');
+
+// Restart
+document.getElementById('btn-restart').addEventListener('click', (e) => {
+    e.stopPropagation(); // Prevent bubbling issues
     if(game.isGameOver) {
         game.resetGame();
     }
+});
+
+// Watch Replay
+document.getElementById('btn-replay').addEventListener('click', async (e) => {
+    e.stopPropagation();
+    
+    // Hide Game UI
+    document.getElementById('ui-layer').classList.add('hidden');
+    document.getElementById('game-container').classList.add('hidden');
+    
+    // Show Replay
+    replayContainer.classList.remove('hidden');
+    
+    // Load Replay Logic
+    // We use dynamic import for the JSX/Remotion module
+    const { mountReplay } = await import('./replay.jsx');
+    
+    const data = game.getReplayJSON();
+    mountReplay('replay-root', data);
+});
+
+// Close Replay
+document.getElementById('close-replay').addEventListener('click', async () => {
+    // Hide Replay
+    replayContainer.classList.add('hidden');
+    
+    // Unmount React
+    const { unmountReplay } = await import('./replay.jsx');
+    unmountReplay();
+    
+    // Show Game UI
+    document.getElementById('ui-layer').classList.remove('hidden');
+    document.getElementById('game-container').classList.remove('hidden');
+    
+    // Ensure Game Over screen is still visible
+    document.getElementById('game-over').classList.remove('hidden');
 });
 
 // Animation Loop

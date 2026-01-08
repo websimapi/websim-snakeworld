@@ -26,6 +26,9 @@ export class Game {
         this.segments = []; // Array of mesh objects
         this.pathHistory = []; // { pos: Vector3, quat: Quaternion }
         this.food = null;
+
+        // Replay Data
+        this.replayData = [];
         
         // Movement
         this.currentDir = new THREE.Vector3(1, 0, 0); // Local tangent direction
@@ -110,6 +113,7 @@ export class Game {
         this.segments.forEach(seg => this.scene.remove(seg));
         this.segments = [];
         this.pathHistory = [];
+        this.replayData = []; // Clear previous recording
         
         // Reset Head
         this.head.position.set(0, this.EARTH_RADIUS, 0);
@@ -313,7 +317,34 @@ export class Game {
         // 7. Pulse Food
         this.food.scale.setScalar(1 + Math.sin(Date.now() * 0.01) * 0.2);
 
+        // 8. Record Frame for Replay
+        this.recordFrame();
+    }
 
+    recordFrame() {
+        // Snapshot current state
+        const frame = {
+            head: {
+                pos: this.head.position.toArray(),
+                quat: this.head.quaternion.toArray()
+            },
+            food: this.food.position.toArray(),
+            segments: this.segments.map(seg => ({
+                pos: seg.position.toArray(),
+                quat: seg.quaternion.toArray(),
+                color: seg.material.color.getHex()
+            }))
+        };
+        this.replayData.push(frame);
+    }
+
+    getReplayJSON() {
+        return {
+            frames: this.replayData,
+            config: {
+                earthRadius: this.EARTH_RADIUS
+            }
+        };
     }
 
     gameOver() {
