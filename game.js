@@ -21,6 +21,10 @@ export class Game {
         this.growthPoints = 0; // Tracks points for next growth
         this.time = 0;
         
+        // Bonus Spawning
+        this.bonusSpawnQueue = 0;
+        this.bonusSpawnDist = 0;
+
         // Entities
         this.earth = null;
         this.head = null;
@@ -137,6 +141,9 @@ export class Game {
         this.pathHistory = [];
         this.replayData = []; // Clear previous recording
         this.recordAccumulator = 0;
+
+        this.bonusSpawnQueue = 0;
+        this.bonusSpawnDist = 0;
         
         // Reset Head
         this.head.position.set(0, this.EARTH_RADIUS, 0);
@@ -217,51 +224,27 @@ export class Game {
     }
 
     spawnBonusTrail() {
+        this.bonusSpawnQueue += 5;
+    }
+
+    spawnSingleBonusFood() {
         const tail = this.segments.length > 0 ? this.segments[this.segments.length - 1] : this.head;
-        const startPos = tail.position.clone();
+        const pos = tail.position.clone();
+
+        // Create mesh
+        const geo = new THREE.SphereGeometry(0.25, 8, 8);
+        const mat = new THREE.MeshStandardMaterial({ 
+            color: 0xffff00, 
+            emissive: 0xffaa00,
+            emissiveIntensity: 0.5 
+        });
+        const mesh = new THREE.Mesh(geo, mat);
+        mesh.position.copy(pos);
+        // Ensure it sits perfectly on surface
+        mesh.position.normalize().multiplyScalar(this.EARTH_RADIUS);
         
-        // Determine backward direction (roughly opposite to tail's forward)
-        // Snake moves along local Z usually, but let's use the vector from 2nd to last segment to last segment
-        let backwardDir;
-        if (this.segments.length >= 2) {
-            const prev = this.segments[this.segments.length - 2];
-            backwardDir = new THREE.Vector3().subVectors(tail.position, prev.position).normalize();
-        } else {
-            // Fallback: use tail's orientation, assuming -Z is backward (standard for LookAt)
-            // But our snake geometry might be rotated differently. 
-            // In update, we use (0,0,1) as forward. So (0,0,-1) is backward.
-            backwardDir = new THREE.Vector3(0, 0, -1).applyQuaternion(tail.quaternion);
-        }
-
-        // Project onto tangent plane to stay on sphere
-        const normal = startPos.clone().normalize();
-        backwardDir.projectOnPlane(normal).normalize();
-
-        for(let i = 1; i <= 5; i++) {
-            // Calculate position: startPos + backwardDir * distance * i
-            // But we need to wrap it around the sphere (Great Circle)
-            // Arc length = r * theta -> theta = arc / r
-            const dist = i * 1.5; // Spacing
-            const angle = dist / this.EARTH_RADIUS;
-            
-            // Rotate startPos around axis (normal x backwardDir) by angle
-            const axis = new THREE.Vector3().crossVectors(normal, backwardDir).normalize();
-            const q = new THREE.Quaternion().setFromAxisAngle(axis, angle);
-            
-            const pos = startPos.clone().applyQuaternion(q);
-
-            // Create mesh
-            const geo = new THREE.SphereGeometry(0.25, 8, 8);
-            const mat = new THREE.MeshStandardMaterial({ 
-                color: 0xffff00, 
-                emissive: 0xffaa00,
-                emissiveIntensity: 0.5 
-            });
-            const mesh = new THREE.Mesh(geo, mat);
-            mesh.position.copy(pos);
-            this.scene.add(mesh);
-            this.bonusFoods.push(mesh);
-        }
+        this.scene.add(mesh);
+        this.bonusFoods.push(mesh);
     }
 
     setTarget(point) {
@@ -373,6 +356,20 @@ export class Game {
                 
                 distanceAccumulator += d;
                 historyIndex++;
+            }
+        }
+
+        // 4.5 Handle Bonus Spawning
+        if (this.bonusSpawnQueue > 0) {
+            const moveDist = this.SNAKE_SPEED * dt;
+            this.bonusSpawnDist += moveDist;
+            
+            const SPACING = 1.5; 
+            
+            while (this.bonusSpawnDist >= SPACING && this.bonusSpawnQueue > 0) {
+                this.bonusSpawnDist -= SPACING;
+                this.bonusSpawnQueue--;
+                this.spawnSingleBonusFood();
             }
         }
 
