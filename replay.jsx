@@ -245,7 +245,7 @@ const ReplayScene = ({ data }) => {
       lineNumber: 232,
       columnNumber: 13
     }),
-    audioCues.map((cue) => /* @__PURE__ */ jsxDEV(Sequence, { from: cue.frame, children: /* @__PURE__ */ jsxDEV(Audio, { src: cue.src }, void 0, false, {
+    audioCues.map((cue) => /* @__PURE__ */ jsxDEV(Sequence, { from: cue.frame, durationInFrames: 90, children: /* @__PURE__ */ jsxDEV(Audio, { src: cue.src }, void 0, false, {
       fileName: "<stdin>",
       lineNumber: 290,
       columnNumber: 21
@@ -283,7 +283,8 @@ const mountReplay = (containerId, replayData) => {
         style: { width: "100%", height: "100%" },
         controls: true,
         loop: true,
-        autoPlay: true
+        autoPlay: true,
+        numberOfSharedAudioTags: 20
       },
       void 0,
       false,
