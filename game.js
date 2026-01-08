@@ -1,5 +1,8 @@
 import * as THREE from 'three';
 import { getTangentDirection, getRandomPointOnSphere } from './math-utils.js';
+import { AudioManager } from './audio-manager.js';
+import { EntityFactory } from './entity-factory.js';
+import { ReplaySystem } from './replay-system.js';
 
 export class Game {
     constructor(scene, camera, renderer) {
@@ -13,6 +16,7 @@ export class Game {
         this.TURN_SPEED = 6.0;
         this.SEGMENT_DISTANCE = 0.8;
         this.STARTING_SEGMENTS = 5;
+        this.RECORD_FPS = 30;
         
         // State
         this.isPlaying = false;
@@ -36,43 +40,23 @@ export class Game {
         // Player Info
         this.playerInfo = { username: 'Player', avatarUrl: '' };
 
-        // Replay Data
-        this.replayData = [];
-        this.frameEvents = []; // Store events occurring in current frame
-        this.RECORD_FPS = 30;
-        this.recordAccumulator = 0;
-        
+        // Subsystems
+        this.audioManager = new AudioManager();
+        this.replaySystem = new ReplaySystem(this.RECORD_FPS);
+
         // Movement
         this.currentDir = new THREE.Vector3(1, 0, 0); // Local tangent direction
         this.targetPoint = null; // Where the user tapped (Vector3)
         
-        // Audio
-        this.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        this.sounds = {};
-        
         this.init();
     }
     
-    async loadSound(name, url) {
-        try {
-            const response = await fetch(url);
-            const arrayBuffer = await response.arrayBuffer();
-            const audioBuffer = await this.audioCtx.decodeAudioData(arrayBuffer);
-            this.sounds[name] = audioBuffer;
-        } catch (e) {
-            console.error('Error loading sound:', name, e);
-        }
-    }
+    // removed function loadSound(name, url) {} - moved to AudioManager
+    // removed function playSound(name) {} - moved to AudioManager
 
     playSound(name) {
-        if (this.sounds[name] && this.audioCtx.state === 'running') {
-            const source = this.audioCtx.createBufferSource();
-            source.buffer = this.sounds[name];
-            source.connect(this.audioCtx.destination);
-            source.start(0);
-        }
-        // Record event for replay
-        this.frameEvents.push(name);
+        this.audioManager.play(name);
+        this.replaySystem.logEvent(name);
     }
 
     setPlayerInfo(info) {
@@ -85,47 +69,28 @@ export class Game {
 
     init() {
         // Load sounds
-        this.loadSound('eat', './snake_eat.mp3');
-        this.loadSound('die', './game_over.mp3');
+        this.audioManager.load('eat', './snake_eat.mp3');
+        this.audioManager.load('die', './game_over.mp3');
 
         // Create Earth
-        const geometry = new THREE.SphereGeometry(this.EARTH_RADIUS, 64, 64);
-        const material = new THREE.MeshStandardMaterial({
-            color: 0x88ccff,
-            emissive: 0x002244, // Slight internal glow to act as "the light"
-            emissiveIntensity: 0.8,
-            transparent: true,
-            opacity: 0.7,
-            roughness: 0.9, // Matte surface to prevent sun glare
-            metalness: 0.0,
-            side: THREE.DoubleSide
-        });
-        this.earth = new THREE.Mesh(geometry, material);
+        this.earth = EntityFactory.createEarth(this.EARTH_RADIUS);
         this.scene.add(this.earth);
         
-        // Atmosphere glow (simplified)
-        const atmGeometry = new THREE.SphereGeometry(this.EARTH_RADIUS * 1.03, 64, 64);
-        const atmMaterial = new THREE.MeshBasicMaterial({
-            color: 0x4488ff,
-            transparent: true,
-            opacity: 0.1,
-            side: THREE.BackSide
-        });
-        this.scene.add(new THREE.Mesh(atmGeometry, atmMaterial));
+        // Atmosphere glow
+        const atmosphere = EntityFactory.createAtmosphere(this.EARTH_RADIUS);
+        this.scene.add(atmosphere);
 
         // Create Snake Head
-        const headGeo = new THREE.BoxGeometry(0.8, 0.4, 0.8);
-        const headMat = new THREE.MeshStandardMaterial({ color: 0x00ff00, emissive: 0x004400 });
-        this.head = new THREE.Mesh(headGeo, headMat);
+        this.head = EntityFactory.createSnakeHead();
         this.head.position.set(0, this.EARTH_RADIUS, 0); // Start at North Pole area
         this.scene.add(this.head);
 
         // Initialize Food
-        const foodGeo = new THREE.SphereGeometry(0.5, 16, 16);
-        const foodMat = new THREE.MeshStandardMaterial({ color: 0xffaa00, emissive: 0xff0000, emissiveIntensity: 0.5 });
-        this.food = new THREE.Mesh(foodGeo, foodMat);
+        this.food = EntityFactory.createFood();
         this.scene.add(this.food);
         this.spawnFood();
+
+        // removed Earth/Atmosphere/Head/Food geometry and material creation code - moved to EntityFactory
 
         this.resetGame();
     }
@@ -139,8 +104,8 @@ export class Game {
         this.bonusFoods = [];
         
         this.pathHistory = [];
-        this.replayData = []; // Clear previous recording
-        this.recordAccumulator = 0;
+        
+        this.replaySystem.reset();
 
         this.bonusSpawnQueue = 0;
         this.bonusSpawnDist = 0;
@@ -186,11 +151,12 @@ export class Game {
     }
 
     addSegmentInternal() {
-        const segGeo = new THREE.BoxGeometry(0.6, 0.3, 0.6);
-        // Gradient color for body
+        // gradient calculation logic preserved
         const color = new THREE.Color().setHSL(0.3 + (this.segments.length * 0.02) % 0.5, 1.0, 0.5);
-        const segMat = new THREE.MeshStandardMaterial({ color: color });
-        const segment = new THREE.Mesh(segGeo, segMat);
+        
+        // removed geometry/material creation - moved to EntityFactory
+        const segment = EntityFactory.createSnakeSegment(color);
+        
         this.scene.add(segment);
         this.segments.push(segment);
     }
@@ -231,14 +197,9 @@ export class Game {
         const tail = this.segments.length > 0 ? this.segments[this.segments.length - 1] : this.head;
         const pos = tail.position.clone();
 
-        // Create mesh
-        const geo = new THREE.SphereGeometry(0.25, 8, 8);
-        const mat = new THREE.MeshStandardMaterial({ 
-            color: 0xffff00, 
-            emissive: 0xffaa00,
-            emissiveIntensity: 0.5 
-        });
-        const mesh = new THREE.Mesh(geo, mat);
+        // removed geometry/material creation - moved to EntityFactory
+        const mesh = EntityFactory.createBonusFood();
+        
         mesh.position.copy(pos);
         // Ensure it sits perfectly on surface
         mesh.position.normalize().multiplyScalar(this.EARTH_RADIUS);
@@ -251,9 +212,7 @@ export class Game {
         if(this.isGameOver) return;
         
         // Resume context on first interaction
-        if(this.audioCtx.state === 'suspended') {
-            this.audioCtx.resume();
-        }
+        this.audioManager.resume();
         
         // Project the point onto the sphere surface to be safe
         this.targetPoint = point.clone().normalize().multiplyScalar(this.EARTH_RADIUS);
@@ -436,78 +395,48 @@ export class Game {
         this.camera.up.copy(snakeForward);
 
         // 8. Record Frame for Replay
-        this.recordAccumulator += dt;
-        if (this.recordAccumulator >= 1 / this.RECORD_FPS) {
-            this.recordFrame();
-            this.recordAccumulator = 0; // Reset
-        }
+        // removed manual record frame logic - moved to ReplaySystem
+        this.replaySystem.update(dt, () => ({
+            head: this.head,
+            camera: this.camera,
+            food: this.food,
+            bonusFoods: this.bonusFoods,
+            segments: this.segments,
+            score: this.score
+        }));
     }
 
-    recordFrame() {
-        // Snapshot current state
-        const frame = {
-            head: {
-                pos: this.head.position.toArray(),
-                quat: this.head.quaternion.toArray()
-            },
-            camera: {
-                pos: this.camera.position.toArray(),
-                quat: this.camera.quaternion.toArray(),
-                up: this.camera.up.toArray()
-            },
-            food: this.food.position.toArray(),
-            bonusFoods: this.bonusFoods.map(b => b.position.toArray()),
-            segments: this.segments.map(seg => ({
-                pos: seg.position.toArray(),
-                quat: seg.quaternion.toArray(),
-                color: seg.material.color.getHex()
-            })),
-            score: this.score,
-            events: [...this.frameEvents]
-        };
-        this.replayData.push(frame);
-        this.frameEvents = []; // Reset events for next frame
-    }
+    // removed function recordFrame() {} - moved to ReplaySystem
 
     getReplayJSON() {
-        // Clone the frames to avoid mutating the original recording
-        const frames = [...this.replayData];
-        
-        // Add 3 seconds of padding frames at the end to show the aftermath
-        if (frames.length > 0) {
-            const lastFrame = frames[frames.length - 1];
-            // Create a static frame copy with no events
-            // We strip events to prevent the death sound from looping
-            const paddingFrame = {
-                ...lastFrame,
-                events: []
-            };
-            
-            const paddingFramesCount = 5 * this.RECORD_FPS; // 5 seconds padding
-            for (let i = 0; i < paddingFramesCount; i++) {
-                frames.push(paddingFrame);
+        // removed manual JSON construction - moved to ReplaySystem
+        return this.replaySystem.getReplayJSON({
+            earthRadius: this.EARTH_RADIUS,
+            fps: this.RECORD_FPS,
+            playerInfo: this.playerInfo,
+            sounds: {
+                eat: './snake_eat.mp3',
+                die: './game_over.mp3'
             }
-        }
-
-        return {
-            frames: frames,
-            config: {
-                earthRadius: this.EARTH_RADIUS,
-                fps: this.RECORD_FPS,
-                playerInfo: this.playerInfo,
-                sounds: {
-                    eat: './snake_eat.mp3',
-                    die: './game_over.mp3'
-                }
-            }
-        };
+        });
     }
 
     gameOver() {
         this.isGameOver = true;
         this.playSound('die');
-        this.recordFrame(); // Ensure death state and sound are recorded
+        
+        // Force record the death frame so the event is captured
+        this.replaySystem.forceRecordFrame({
+            head: this.head,
+            camera: this.camera,
+            food: this.food,
+            bonusFoods: this.bonusFoods,
+            segments: this.segments,
+            score: this.score
+        });
+
         document.getElementById('game-over').classList.remove('hidden');
         this.isPlaying = false;
     }
 }
+```Summary: Refactored `game.js` into modular components: `EntityFactory` for mesh creation, `AudioManager` for sound, and `ReplaySystem` for recording logic. This reduces `game.js` size and improves maintainability while preserving all functionality. Tombstones added to `game.js`.
