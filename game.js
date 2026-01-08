@@ -27,6 +27,7 @@ export class Game {
 
         // Entities
         this.earth = null;
+        this.earthTexture = new THREE.TextureLoader().load('earth_texture.png');
         this.head = null;
         this.segments = []; // Array of mesh objects
         this.pathHistory = []; // { pos: Vector3, quat: Quaternion }
@@ -34,7 +35,7 @@ export class Game {
         this.bonusFoods = []; // Array of meshes for yellow food
         
         // Player Info
-        this.playerInfo = { username: 'Player', avatarUrl: '' };
+        this.playerInfo = { username: 'Player', avatarUrl: 'default_avatar.png' };
 
         // Replay Data
         this.replayData = [];
@@ -91,14 +92,12 @@ export class Game {
         // Create Earth
         const geometry = new THREE.SphereGeometry(this.EARTH_RADIUS, 64, 64);
         const material = new THREE.MeshStandardMaterial({
-            color: 0x88ccff,
-            emissive: 0x002244, // Slight internal glow to act as "the light"
-            emissiveIntensity: 0.8,
-            transparent: true,
-            opacity: 0.7,
-            roughness: 0.9, // Matte surface to prevent sun glare
-            metalness: 0.0,
-            side: THREE.DoubleSide
+            map: this.earthTexture,
+            emissive: 0x222222,
+            emissiveIntensity: 0.2,
+            roughness: 0.8,
+            metalness: 0.2,
+            side: THREE.FrontSide
         });
         this.earth = new THREE.Mesh(geometry, material);
         this.scene.add(this.earth);
@@ -483,14 +482,11 @@ export class Game {
                 events: []
             };
             
-            const paddingFramesCount = 3 * this.RECORD_FPS; // 3 seconds padding
+            const paddingFramesCount = 5 * this.RECORD_FPS; // 5 seconds padding
             for (let i = 0; i < paddingFramesCount; i++) {
                 frames.push(paddingFrame);
             }
         }
-
-        // Resolve absolute URLs for assets to ensure they work in the render context
-        const getAbsoluteUrl = (path) => new URL(path, window.location.href).href;
 
         return {
             frames: frames,
@@ -499,8 +495,8 @@ export class Game {
                 fps: this.RECORD_FPS,
                 playerInfo: this.playerInfo,
                 sounds: {
-                    eat: getAbsoluteUrl('./snake_eat.mp3'),
-                    die: getAbsoluteUrl('./game_over.mp3')
+                    eat: './snake_eat.mp3',
+                    die: './game_over.mp3'
                 }
             }
         };
