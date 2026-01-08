@@ -191,6 +191,9 @@ export class Game {
             if (Math.random() < 0.5) {
                 this.foodManager.spawnBonusTrail(5);
             }
+
+            // Give a nice tongue slither on big bites
+            this.snake.triggerTongue();
         }
         
         // Sort indices descending to remove safely
@@ -201,6 +204,9 @@ export class Game {
             const scoreEl = document.getElementById('player-score');
             if(scoreEl) scoreEl.innerText = this.score;
             this.foodManager.removeBonusFood(idx);
+
+            // Flick tongue on snack-sized bonus foods
+            this.snake.triggerTongue();
         });
 
         // Check Growth
