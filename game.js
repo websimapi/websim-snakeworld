@@ -3,6 +3,7 @@ import { Snake } from './snake.js';
 import { FoodManager } from './food-manager.js';
 import { AudioManager } from './audio-manager.js';
 import { ReplayRecorder } from './replay-recorder.js';
+import { hideLoader } from './loader.js';
 
 export class Game {
     constructor(scene, camera, renderer) {
@@ -66,6 +67,7 @@ export class Game {
                 avatarEl.src = url;
                 // Once avatar (or fallback) is ready, fade in the whole experience together
                 document.body.classList.add('ready');
+                hideLoader(); // Fade out loading screen
                 if (playerCardEl) {
                     // Fade in avatar, username, and score together
                     playerCardEl.classList.add('visible');

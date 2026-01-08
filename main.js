@@ -1,5 +1,9 @@
 import * as THREE from 'three';
 import { Game } from './game.js';
+import { initLoader } from './loader.js';
+
+// Start Loading Screen immediately
+initLoader();
 
 // Setup basic Three.js scene
 const scene = new THREE.Scene();
