@@ -386,8 +386,27 @@ export class Game {
     }
 
     getReplayJSON() {
+        // Clone the frames to avoid mutating the original recording
+        const frames = [...this.replayData];
+        
+        // Add 3 seconds of padding frames at the end to show the aftermath
+        if (frames.length > 0) {
+            const lastFrame = frames[frames.length - 1];
+            // Create a static frame copy with no events
+            // We strip events to prevent the death sound from looping
+            const paddingFrame = {
+                ...lastFrame,
+                events: []
+            };
+            
+            const paddingFramesCount = 3 * this.RECORD_FPS; // 3 seconds * 30 fps
+            for (let i = 0; i < paddingFramesCount; i++) {
+                frames.push(paddingFrame);
+            }
+        }
+
         return {
-            frames: this.replayData,
+            frames: frames,
             config: {
                 earthRadius: this.EARTH_RADIUS,
                 fps: this.RECORD_FPS,
@@ -403,6 +422,7 @@ export class Game {
     gameOver() {
         this.isGameOver = true;
         this.playSound('die');
+        this.recordFrame(); // Ensure death state and sound are recorded
         document.getElementById('game-over').classList.remove('hidden');
         this.isPlaying = false;
     }
