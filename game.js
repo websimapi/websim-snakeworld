@@ -483,7 +483,7 @@ export class Game {
                 events: []
             };
             
-            const paddingFramesCount = 5 * this.RECORD_FPS; // 5 seconds padding
+            const paddingFramesCount = 3 * this.RECORD_FPS; // 3 seconds padding
             for (let i = 0; i < paddingFramesCount; i++) {
                 frames.push(paddingFrame);
             }
