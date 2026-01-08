@@ -29,6 +29,7 @@ export class Game {
 
         // Replay Data
         this.replayData = [];
+        this.frameEvents = []; // Store events occurring in current frame
         this.RECORD_FPS = 30;
         this.recordAccumulator = 0;
         
@@ -61,6 +62,8 @@ export class Game {
             source.connect(this.audioCtx.destination);
             source.start(0);
         }
+        // Record event for replay
+        this.frameEvents.push(name);
     }
 
     init() {
@@ -361,9 +364,11 @@ export class Game {
                 pos: seg.position.toArray(),
                 quat: seg.quaternion.toArray(),
                 color: seg.material.color.getHex()
-            }))
+            })),
+            events: [...this.frameEvents]
         };
         this.replayData.push(frame);
+        this.frameEvents = []; // Reset events for next frame
     }
 
     getReplayJSON() {
@@ -371,7 +376,11 @@ export class Game {
             frames: this.replayData,
             config: {
                 earthRadius: this.EARTH_RADIUS,
-                fps: this.RECORD_FPS
+                fps: this.RECORD_FPS,
+                sounds: {
+                    eat: './snake_eat.mp3',
+                    die: './game_over.mp3'
+                }
             }
         };
     }

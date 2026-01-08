@@ -1,13 +1,32 @@
 import { jsxDEV } from "react/jsx-dev-runtime";
-import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
+import React, { useEffect, useLayoutEffect, useRef, useState, useMemo } from "react";
 import { createRoot } from "react-dom/client";
 import { Player } from "@websim/remotion/player";
-import { AbsoluteFill, useCurrentFrame, useVideoConfig } from "remotion";
+import { AbsoluteFill, useCurrentFrame, useVideoConfig, Audio, Sequence } from "remotion";
 import * as THREE from "three";
 const ReplayScene = ({ data }) => {
   const frameIndex = useCurrentFrame();
   const { width, height } = useVideoConfig();
   const containerRef = useRef(null);
+  const audioCues = useMemo(() => {
+    const cues = [];
+    if (!data || !data.frames) return cues;
+    data.frames.forEach((frame, idx) => {
+      if (frame.events && frame.events.length > 0) {
+        frame.events.forEach((soundName, i) => {
+          const url = data.config.sounds && data.config.sounds[soundName];
+          if (url) {
+            cues.push({
+              id: `sfx-${idx}-${i}-${soundName}`,
+              frame: idx,
+              src: url
+            });
+          }
+        });
+      }
+    });
+    return cues;
+  }, [data]);
   const sceneRef = useRef(null);
   const cameraRef = useRef(null);
   const rendererRef = useRef(null);
@@ -96,6 +115,12 @@ const ReplayScene = ({ data }) => {
       sceneRef.current.add(segment);
       objs.segments.push(segment);
     }
+    while (objs.segments.length > frameData.segments.length) {
+      const segment = objs.segments.pop();
+      sceneRef.current.remove(segment);
+      if (segment.geometry) segment.geometry.dispose();
+      if (segment.material) segment.material.dispose();
+    }
     frameData.segments.forEach((segData, i) => {
       if (objs.segments[i]) {
         objs.segments[i].position.fromArray(segData.pos);
@@ -120,10 +145,25 @@ const ReplayScene = ({ data }) => {
     }
     rendererRef.current.render(sceneRef.current, cameraRef.current);
   }, [frameIndex, data]);
-  return /* @__PURE__ */ jsxDEV("div", { ref: containerRef, style: { width: "100%", height: "100%" } }, void 0, false, {
+  return /* @__PURE__ */ jsxDEV(AbsoluteFill, { children: [
+    /* @__PURE__ */ jsxDEV("div", { ref: containerRef, style: { width: "100%", height: "100%" } }, void 0, false, {
+      fileName: "<stdin>",
+      lineNumber: 202,
+      columnNumber: 13
+    }),
+    audioCues.map((cue) => /* @__PURE__ */ jsxDEV(Sequence, { from: cue.frame, children: /* @__PURE__ */ jsxDEV(Audio, { src: cue.src }, void 0, false, {
+      fileName: "<stdin>",
+      lineNumber: 205,
+      columnNumber: 21
+    }) }, cue.id, false, {
+      fileName: "<stdin>",
+      lineNumber: 204,
+      columnNumber: 17
+    }))
+  ] }, void 0, true, {
     fileName: "<stdin>",
-    lineNumber: 170,
-    columnNumber: 12
+    lineNumber: 201,
+    columnNumber: 9
   });
 };
 let replayRoot = null;
@@ -155,12 +195,12 @@ const mountReplay = (containerId, replayData) => {
       false,
       {
         fileName: "<stdin>",
-        lineNumber: 193,
+        lineNumber: 232,
         columnNumber: 13
       }
     ) }, void 0, false, {
       fileName: "<stdin>",
-      lineNumber: 192,
+      lineNumber: 231,
       columnNumber: 9
     })
   );
