@@ -26,6 +26,9 @@ export class Game {
         this.segments = []; // Array of mesh objects
         this.pathHistory = []; // { pos: Vector3, quat: Quaternion }
         this.food = null;
+        
+        // Player Info
+        this.playerInfo = { username: 'Player', avatarUrl: '' };
 
         // Replay Data
         this.replayData = [];
@@ -64,6 +67,14 @@ export class Game {
         }
         // Record event for replay
         this.frameEvents.push(name);
+    }
+
+    setPlayerInfo(info) {
+        this.playerInfo = info;
+        const avatarEl = document.getElementById('player-avatar');
+        const nameEl = document.getElementById('player-name');
+        if(avatarEl && info.avatarUrl) avatarEl.src = info.avatarUrl;
+        if(nameEl && info.username) nameEl.textContent = info.username;
     }
 
     init() {
@@ -141,7 +152,8 @@ export class Game {
         this.isGameOver = false;
         this.isPlaying = true;
 
-        document.getElementById('score').innerText = this.score;
+        const scoreEl = document.getElementById('player-score');
+        if(scoreEl) scoreEl.innerText = this.score;
         document.getElementById('game-over').classList.add('hidden');
         
         // Rebuild initial body
@@ -313,7 +325,8 @@ export class Game {
         if (this.head.position.distanceTo(this.food.position) < 1.5) {
             this.playSound('eat');
             this.score += 10;
-            document.getElementById('score').innerText = this.score;
+            const scoreEl = document.getElementById('player-score');
+            if(scoreEl) scoreEl.innerText = this.score;
             this.addSegment();
             this.spawnFood();
         }
@@ -365,6 +378,7 @@ export class Game {
                 quat: seg.quaternion.toArray(),
                 color: seg.material.color.getHex()
             })),
+            score: this.score,
             events: [...this.frameEvents]
         };
         this.replayData.push(frame);
@@ -377,6 +391,7 @@ export class Game {
             config: {
                 earthRadius: this.EARTH_RADIUS,
                 fps: this.RECORD_FPS,
+                playerInfo: this.playerInfo,
                 sounds: {
                     eat: './snake_eat.mp3',
                     die: './game_over.mp3'

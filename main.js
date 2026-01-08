@@ -35,6 +35,15 @@ scene.add(hemiLight);
 // Initialize Game
 const game = new Game(scene, camera, renderer);
 
+// Setup User Info via WebsimSocket
+const room = new WebsimSocket();
+room.initialize().then(() => {
+    const me = room.peers[room.clientId];
+    if(me) {
+        game.setPlayerInfo(me);
+    }
+});
+
 // Raycaster for interaction
 const raycaster = new THREE.Raycaster();
 const mouse = new THREE.Vector2();

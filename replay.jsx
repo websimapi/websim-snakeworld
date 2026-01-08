@@ -145,24 +145,104 @@ const ReplayScene = ({ data }) => {
     }
     rendererRef.current.render(sceneRef.current, cameraRef.current);
   }, [frameIndex, data]);
+  const currentFrameData = data.frames[Math.min(Math.floor(frameIndex), data.frames.length - 1)] || {};
+  const score = currentFrameData.score || 0;
+  const playerInfo = data.config.playerInfo || { username: "Player", avatarUrl: "https://via.placeholder.com/64" };
   return /* @__PURE__ */ jsxDEV(AbsoluteFill, { children: [
     /* @__PURE__ */ jsxDEV("div", { ref: containerRef, style: { width: "100%", height: "100%" } }, void 0, false, {
       fileName: "<stdin>",
-      lineNumber: 202,
+      lineNumber: 207,
+      columnNumber: 13
+    }),
+    /* @__PURE__ */ jsxDEV("div", { style: {
+      position: "absolute",
+      top: "20px",
+      left: "20px",
+      display: "flex",
+      alignItems: "flex-start",
+      gap: "15px",
+      pointerEvents: "none",
+      fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif"
+    }, children: [
+      /* @__PURE__ */ jsxDEV("div", { style: {
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        gap: "5px"
+      }, children: [
+        /* @__PURE__ */ jsxDEV(
+          "img",
+          {
+            src: playerInfo.avatarUrl || "https://via.placeholder.com/64",
+            style: {
+              width: "64px",
+              height: "64px",
+              borderRadius: "50%",
+              border: "3px solid white",
+              backgroundColor: "#333",
+              objectFit: "cover",
+              boxShadow: "0 4px 6px rgba(0,0,0,0.3)"
+            }
+          },
+          void 0,
+          false,
+          {
+            fileName: "<stdin>",
+            lineNumber: 226,
+            columnNumber: 21
+          }
+        ),
+        /* @__PURE__ */ jsxDEV("div", { style: {
+          color: "white",
+          fontSize: "14px",
+          fontWeight: "600",
+          textShadow: "1px 1px 2px rgba(0,0,0,0.8)",
+          background: "rgba(0,0,0,0.5)",
+          padding: "2px 6px",
+          borderRadius: "4px",
+          maxWidth: "100px",
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+          whiteSpace: "nowrap"
+        }, children: playerInfo.username }, void 0, false, {
+          fileName: "<stdin>",
+          lineNumber: 238,
+          columnNumber: 21
+        })
+      ] }, void 0, true, {
+        fileName: "<stdin>",
+        lineNumber: 220,
+        columnNumber: 17
+      }),
+      /* @__PURE__ */ jsxDEV("div", { style: {
+        fontSize: "48px",
+        color: "white",
+        fontWeight: "bold",
+        textShadow: "2px 2px 4px rgba(0,0,0,0.5)",
+        alignSelf: "flex-start",
+        marginTop: "10px"
+      }, children: score }, void 0, false, {
+        fileName: "<stdin>",
+        lineNumber: 254,
+        columnNumber: 17
+      })
+    ] }, void 0, true, {
+      fileName: "<stdin>",
+      lineNumber: 210,
       columnNumber: 13
     }),
     audioCues.map((cue) => /* @__PURE__ */ jsxDEV(Sequence, { from: cue.frame, children: /* @__PURE__ */ jsxDEV(Audio, { src: cue.src }, void 0, false, {
       fileName: "<stdin>",
-      lineNumber: 205,
+      lineNumber: 268,
       columnNumber: 21
     }) }, cue.id, false, {
       fileName: "<stdin>",
-      lineNumber: 204,
+      lineNumber: 267,
       columnNumber: 17
     }))
   ] }, void 0, true, {
     fileName: "<stdin>",
-    lineNumber: 201,
+    lineNumber: 206,
     columnNumber: 9
   });
 };
@@ -195,12 +275,12 @@ const mountReplay = (containerId, replayData) => {
       false,
       {
         fileName: "<stdin>",
-        lineNumber: 232,
+        lineNumber: 295,
         columnNumber: 13
       }
     ) }, void 0, false, {
       fileName: "<stdin>",
-      lineNumber: 231,
+      lineNumber: 294,
       columnNumber: 9
     })
   );
