@@ -66,12 +66,14 @@ export class Game {
         // Create Earth
         const geometry = new THREE.SphereGeometry(this.EARTH_RADIUS, 64, 64);
         const material = new THREE.MeshStandardMaterial({
-            color: 0xaaddff, // Slight blue icy tint
+            color: 0x88ccff,
+            emissive: 0x002244, // Slight internal glow to act as "the light"
+            emissiveIntensity: 0.8,
             transparent: true,
-            opacity: 0.6, // Less transparent as requested
-            roughness: 0.2, // Smooth for moon reflections
-            metalness: 0.3, // Slight metallic shine
-            side: THREE.DoubleSide // Gives volume to the transparent sphere
+            opacity: 0.7,
+            roughness: 0.9, // Matte surface to prevent sun glare
+            metalness: 0.0,
+            side: THREE.DoubleSide
         });
         this.earth = new THREE.Mesh(geometry, material);
         this.scene.add(this.earth);
@@ -311,33 +313,7 @@ export class Game {
         // 7. Pulse Food
         this.food.scale.setScalar(1 + Math.sin(Date.now() * 0.01) * 0.2);
 
-        // Check visibility of food relative to camera
-        if (this.camera && this.food) {
-            const toCam = new THREE.Vector3().subVectors(this.camera.position, this.food.position).normalize();
-            const foodNormal = this.food.position.clone().normalize();
-            
-            // Check orientation relative to camera using dot product.
-            // A threshold of -0.2 (instead of 0) allows the food to switch to "Visible" mode
-            // slightly before its center clears the horizon, ensuring that if any part
-            // of the food is sticking out, it renders as solid.
-            const isVisible = foodNormal.dot(toCam) > -0.2;
 
-            if (!isVisible) {
-                // Ghost Mode (Outline) for occluded food
-                this.food.material.color.setHex(0x888888);
-                this.food.material.emissive.setHex(0x000000);
-                this.food.material.transparent = true;
-                this.food.material.opacity = 0.5;
-                this.food.material.wireframe = true;
-            } else {
-                // Normal Mode
-                this.food.material.color.setHex(0xffaa00);
-                this.food.material.emissive.setHex(0xff0000);
-                this.food.material.transparent = false;
-                this.food.material.opacity = 1.0;
-                this.food.material.wireframe = false;
-            }
-        }
     }
 
     gameOver() {

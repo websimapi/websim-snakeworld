@@ -26,12 +26,10 @@ const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
 scene.add(ambientLight);
 
 // Hemisphere light for natural, omnidirectional illumination
-const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444, 0.6);
+const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444, 1.0);
 scene.add(hemiLight);
 
-// Camera-mounted "Headlamp" to fully illuminate the view from the player's perspective
-const cameraLight = new THREE.DirectionalLight(0xffffff, 0.8);
-camera.add(cameraLight);
+// Camera-mounted light removed to prevent glare.
 // Note: Camera is already added to the scene via cameraRig
 
 // Initialize Game
