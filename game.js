@@ -41,8 +41,45 @@ export class Game {
         this.playerInfo = info;
         const avatarEl = document.getElementById('player-avatar');
         const nameEl = document.getElementById('player-name');
-        if(avatarEl && info.avatarUrl) avatarEl.src = info.avatarUrl;
-        if(nameEl && info.username) nameEl.textContent = info.username;
+        const playerCardEl = document.getElementById('player-card');
+
+        // Always set name immediately if available
+        if (nameEl && info.username) {
+            nameEl.textContent = info.username;
+        }
+
+        // If we don't have an avatar element, nothing more to do
+        if (!avatarEl) return;
+
+        const fallbackUrl = './default_avatar.png';
+        const primaryUrl = info.avatarUrl || fallbackUrl;
+
+        const tryLoad = (urlList, index = 0) => {
+            if (index >= urlList.length) {
+                // No image could be loaded; leave card hidden
+                return;
+            }
+
+            const url = urlList[index];
+            const img = new Image();
+            img.onload = () => {
+                avatarEl.src = url;
+                // Once avatar (or fallback) is ready, fade in the whole experience together
+                document.body.classList.add('ready');
+                if (playerCardEl) {
+                    // Fade in avatar, username, and score together
+                    playerCardEl.classList.add('visible');
+                }
+            };
+            img.onerror = () => {
+                // Try next URL in the list
+                tryLoad(urlList, index + 1);
+            };
+            img.src = url;
+        };
+
+        // Prefer provided avatar, then fallback to default
+        tryLoad([primaryUrl === fallbackUrl ? fallbackUrl : primaryUrl, fallbackUrl]);
     }
 
     init() {

@@ -35,6 +35,8 @@ scene.add(hemiLight);
 // Initialize Game
 const game = new Game(scene, camera, renderer);
 
+
+
 // Setup User Info via WebsimSocket
 const room = new WebsimSocket();
 room.initialize().then(() => {
