@@ -119,22 +119,27 @@ const ReplayScene = ({ data, isMuted }) => {
     const objs = objectsRef.current;
     const currentTime = safeIndex / fps;
     rippleUniforms.current.uTime.value = currentTime;
-    let activeRippleCount = 0;
     for (let i = 0; i < 5; i++) rippleUniforms.current.uRippleStartTimes.value[i] = -1e3;
-    for (const rip of rippleEvents) {
-      const ripTime = rip.frame / fps;
-      const age = currentTime - ripTime;
-      if (age >= 0 && age < 2 && activeRippleCount < 5) {
-        rippleUniforms.current.uRippleCenters.value[activeRippleCount].copy(rip.center);
-        rippleUniforms.current.uRippleStartTimes.value[activeRippleCount] = ripTime;
+    const slotsFilled = [false, false, false, false, false];
+    let filledCount = 0;
+    for (let i = rippleEvents.length - 1; i >= 0; i--) {
+      const rip = rippleEvents[i];
+      if (rip.frame > safeIndex) continue;
+      const slot = i % 5;
+      if (!slotsFilled[slot]) {
+        const ripTime = rip.frame / fps;
+        rippleUniforms.current.uRippleCenters.value[slot].copy(rip.center);
+        rippleUniforms.current.uRippleStartTimes.value[slot] = ripTime;
         let intensity = 0.15;
         if (rip.duration > 200) {
           const factor = Math.min((rip.duration - 200) / 400, 1);
           intensity = 0.15 + factor * 0.3;
         }
-        rippleUniforms.current.uRippleIntensities.value[activeRippleCount] = intensity;
-        activeRippleCount++;
+        rippleUniforms.current.uRippleIntensities.value[slot] = intensity;
+        slotsFilled[slot] = true;
+        filledCount++;
       }
+      if (filledCount === 5) break;
     }
     if (!objs.head || !objs.food) return;
     objs.head.position.fromArray(frameData.head.pos);
@@ -200,7 +205,7 @@ const ReplayScene = ({ data, isMuted }) => {
   return /* @__PURE__ */ jsxDEV(AbsoluteFill, { children: [
     /* @__PURE__ */ jsxDEV("div", { ref: containerRef, style: { width: "100%", height: "100%" } }, void 0, false, {
       fileName: "<stdin>",
-      lineNumber: 261,
+      lineNumber: 280,
       columnNumber: 13
     }),
     /* @__PURE__ */ jsxDEV("div", { style: {
@@ -241,7 +246,7 @@ const ReplayScene = ({ data, isMuted }) => {
           false,
           {
             fileName: "<stdin>",
-            lineNumber: 280,
+            lineNumber: 299,
             columnNumber: 21
           }
         ),
@@ -259,12 +264,12 @@ const ReplayScene = ({ data, isMuted }) => {
           whiteSpace: "nowrap"
         }, children: playerInfo.username }, void 0, false, {
           fileName: "<stdin>",
-          lineNumber: 296,
+          lineNumber: 315,
           columnNumber: 21
         })
       ] }, void 0, true, {
         fileName: "<stdin>",
-        lineNumber: 274,
+        lineNumber: 293,
         columnNumber: 17
       }),
       /* @__PURE__ */ jsxDEV("div", { style: {
@@ -276,29 +281,29 @@ const ReplayScene = ({ data, isMuted }) => {
         marginTop: "10px"
       }, children: score }, void 0, false, {
         fileName: "<stdin>",
-        lineNumber: 312,
+        lineNumber: 331,
         columnNumber: 17
       })
     ] }, void 0, true, {
       fileName: "<stdin>",
-      lineNumber: 264,
+      lineNumber: 283,
       columnNumber: 13
     }),
     activeCues.map((cue) => {
       const duration = cue.name === "die" ? 150 : 30;
       return /* @__PURE__ */ jsxDEV(Sequence, { from: cue.frame, durationInFrames: duration, children: /* @__PURE__ */ jsxDEV(Audio, { src: cue.src, volume: isMuted ? 0 : 1 }, void 0, false, {
         fileName: "<stdin>",
-        lineNumber: 328,
+        lineNumber: 347,
         columnNumber: 25
       }) }, cue.id, false, {
         fileName: "<stdin>",
-        lineNumber: 327,
+        lineNumber: 346,
         columnNumber: 21
       });
     })
   ] }, void 0, true, {
     fileName: "<stdin>",
-    lineNumber: 260,
+    lineNumber: 279,
     columnNumber: 9
   });
 };
