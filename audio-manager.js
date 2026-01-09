@@ -1,8 +1,13 @@
 export class AudioManager {
     constructor() {
         this.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        this.masterGain = this.audioCtx.createGain();
+        this.masterGain.gain.value = 0.5;
+        this.masterGain.connect(this.audioCtx.destination);
+
         this.sounds = {};
         this.muted = false;
+        this.enabled = false;
     }
 
     async load(name, url) {
@@ -16,17 +21,20 @@ export class AudioManager {
         }
     }
 
-    play(name) {
-        if (this.muted) return;
+    play(name, volume = 1.0) {
+        if (!this.enabled || this.muted) return;
         if (this.sounds[name] && this.audioCtx.state === 'running') {
             const source = this.audioCtx.createBufferSource();
+            const gainNode = this.audioCtx.createGain();
+            gainNode.gain.value = volume;
             source.buffer = this.sounds[name];
-            source.connect(this.audioCtx.destination);
+            source.connect(gainNode).connect(this.masterGain);
             source.start(0);
         }
     }
 
     resume() {
+        this.enabled = true;
         if (this.audioCtx.state === 'suspended') {
             this.audioCtx.resume();
         }
